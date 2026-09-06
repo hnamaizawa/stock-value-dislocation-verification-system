@@ -1,0 +1,77 @@
+name: Apply v0.6.51 Streamlit compatibility fix
+
+on:
+  push:
+    branches:
+      - feature/v0.6.51-link-button-compat
+    paths:
+      - .github/workflows/apply-v0651.yml
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+
+      - name: Apply v0.6.51 changes
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          dashboard = Path('dashboard.py')
+          s = dashboard.read_text(encoding='utf-8')
+          old = 'st.link_button("記事を開く", url, key=f"news_link_{company[\'code\']}_{index}")'
+          new = 'st.link_button("記事を開く", url)'
+          if old not in s:
+              raise SystemExit('target link_button call not found')
+          dashboard.write_text(s.replace(old, new, 1), encoding='utf-8')
+
+          pyproject = Path('pyproject.toml')
+          s = pyproject.read_text(encoding='utf-8')
+          pyproject.write_text(s.replace('version = "0.6.50"', 'version = "0.6.51"', 1), encoding='utf-8')
+
+          readme = Path('README.md')
+          s = readme.read_text(encoding='utf-8')
+          readme.write_text(s.replace('Version: **0.6.50**', 'Version: **0.6.51**', 1), encoding='utf-8')
+
+          changelog = Path('CHANGELOG.md')
+          s = changelog.read_text(encoding='utf-8')
+          entry = '''## v0.6.51\n- Streamlit 1.53.0 互換性修正として、個別銘柄ニュースの `st.link_button()` から未対応の `key=` 引数を削除。\n- `TypeError: ButtonMixin.link_button() got an unexpected keyword argument 'key'` の再発防止テストを追加。\n- 分析ロジック、データ取得、テーマ、安全境界は変更なし。\n\n'''
+          changelog.write_text(entry + s, encoding='utf-8')
+
+          test = Path('tests/test_streamlit_link_button_compatibility.py')
+          test.write_text('''from pathlib import Path\n\n\ndef test_link_button_calls_are_compatible_with_pinned_streamlit():\n    source = Path("dashboard.py").read_text(encoding="utf-8")\n    assert 'st.link_button("記事を開く", url, key=' not in source\n    assert 'st.link_button("記事を開く", url)' in source\n''', encoding='utf-8')
+          PY
+
+      - name: Install project and development dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[dashboard,dev]"
+
+      - name: Run pytest
+        run: python -m pytest tests/
+
+      - name: Run harness checks
+        run: python scripts/harness_check.py
+
+      - name: Commit v0.6.51 changes and remove bootstrap workflow
+        shell: bash
+        run: |
+          rm -rf src/*.egg-info .github/workflows/apply-v0651.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add dashboard.py pyproject.toml README.md CHANGELOG.md tests/test_streamlit_link_button_compatibility.py .github/workflows/apply-v0651.yml
+          git commit -m "Fix Streamlit link_button compatibility for v0.6.51"
+          git push origin HEAD:feature/v0.6.51-link-button-compat
