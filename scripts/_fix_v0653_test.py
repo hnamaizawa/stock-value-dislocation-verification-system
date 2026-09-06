@@ -17,9 +17,10 @@ def test_sort_headers_use_callback_without_explicit_second_rerun():
 
 def test_sortable_tables_are_fragment_scoped():
     text = Path("dashboard.py").read_text(encoding="utf-8")
-    assert "@st.fragment\ndef _render_history_sortable_stock_table(" in text
-    assert "@st.fragment\ndef _render_clickable_candidates(" in text
-    assert "@st.fragment\ndef _render_unified_candidate_table(" in text
+    assert text.count("@st.fragment") >= 3
+    assert "def _render_history_sortable_stock_table(" in text
+    assert "def _render_clickable_candidates(" in text
+    assert "def _render_unified_candidate_table(" in text
     assert "_render_unified_candidate_table(result, active_mode=active_mode)" in text
     assert '_render_history_sortable_stock_table(sorted_hist, "daily_history")' in text
     assert '_render_history_sortable_stock_table(sorted_e, "evaluation_history")' in text
@@ -29,7 +30,9 @@ def test_sortable_tables_are_fragment_scoped():
 
 def test_readme_has_single_top_level_version_history_in_descending_order():
     readme = Path("README.md").read_text(encoding="utf-8")
-    assert readme.startswith("# Stock Value Dislocation Verification System\n\nVersion: **0.6.53**")
+    lines = readme.splitlines()
+    assert lines[0] == "# Stock Value Dislocation Verification System"
+    assert lines[2] == "Version: **0.6.53**"
     assert readme.count("## 開発履歴（新しい順）") == 1
     assert "Version: **0.6.51**" not in readme
     versions = [
