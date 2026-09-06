@@ -1,0 +1,38 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "stock-value-dislocation-verification-system"
+version = "0.6.41"
+description = "日本株の価格乖離を実データと最新外部日足で調査し、投資判断の検証を支援するシステム"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+  "pandas>=2.2,<3",
+  "numpy>=1.26,<3",
+  "pydantic>=2.7,<3",
+  "PyYAML>=6.0,<7",
+  "typer>=0.12,<1",
+  "rich>=13.7,<15",
+  "python-dotenv>=1.0,<2",
+  "python-dateutil>=2.9,<3",
+  "jquants-api-client>=2.1,<3",
+  "pyarrow>=17,<22",
+]
+
+[project.optional-dependencies]
+dashboard = ["streamlit==1.53.0", "plotly>=5.22,<7", "yfinance>=1.0,<2", "deep-translator>=1.11,<2"]
+dev = ["pytest>=8.2,<9", "ruff>=0.5,<1"]
+
+[project.scripts]
+value-dislocation = "value_dislocation.cli:app"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+
+[tool.ruff]
+line-length = 100

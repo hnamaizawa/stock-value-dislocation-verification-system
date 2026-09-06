@@ -1,0 +1,6 @@
+﻿event_date,code,category,externality,temporary_probability,catalyst_probability,evidence,source_url,review_status
+2026-02-03,90001,原材料価格高騰,0.9,0.78,0.72,主原料の国際価格急騰で短期採算が圧迫。価格改定を段階実施予定。,https://example.com/demo/90001-ir,approved
+2026-02-10,90002,海外供給障害,0.88,0.74,0.68,海外サプライヤー停止による調達費上昇。代替調達先を確保。,https://example.com/demo/90002-ir,approved
+2026-03-01,90005,燃料価格・運賃改定遅延,0.82,0.7,0.62,燃料費上昇に対し運賃改定が一四半期遅延。顧客と改定合意済み。,https://example.com/demo/90005-ir,approved
+2025-10-15,90004,競争激化,0.35,0.2,0.15,EC競争と店舗固定費の悪化。外的要因より構造問題の疑い。,https://example.com/demo/90004-ir,rejected
+2026-06-15,90006,大型案件延期,0.65,0.55,0.5,顧客都合で案件検収が延期。受注残は維持。,https://example.com/demo/90006-ir,pending

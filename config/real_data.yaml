@@ -1,0 +1,121 @@
+mode: paper
+
+safety:
+  order_transmission_enabled: false
+  allow_browser_automation: false
+  allow_sbi_credentials: false
+  require_human_event_approval: true
+  require_human_order_approval: true
+
+providers:
+  jquants:
+    enabled: true
+    api_key_env: JQUANTS_API_KEY
+    include_topix: true
+    include_earnings_calendar: true
+    tdnet_addon_enabled: false
+    rate_limit:
+      strategy: adaptive_serial_resumable
+      initial_interval_seconds: 13.0
+      rate_limited_interval_seconds: 20.0
+      max_attempts: 8
+      initial_backoff_seconds: 65.0
+      max_backoff_seconds: 900.0
+      backoff_multiplier: 2.0
+      skip_weekends: true
+      progress_every_days: 10
+  edinet:
+    enabled: false
+    api_key_env: EDINET_API_KEY
+  sbi_csv:
+    enabled: false
+
+paths:
+  companies: data/curated/latest/companies.csv
+  prices: data/curated/latest/prices.csv
+  financials: data/curated/latest/financials.csv
+  events: data/reviews/external_event_assessments.csv
+  output_dir: outputs/real
+  raw_dir: data/raw
+  staged_dir: data/staged
+  curated_dir: data/curated
+  reviews_dir: data/reviews
+  portfolio_dir: data/portfolio
+
+runtime:
+  timezone: Asia/Tokyo
+  use_latest_completed_trading_day: true
+  price_lookback_days: 400
+  financial_lookback_days: 1150
+  fail_on_partial_data: true
+  reject_sample_data: true
+  max_data_age_days_for_order_preview: 7
+
+universe:
+  allowed_markets: [Prime, Standard, Growth]
+  min_average_turnover_yen_20d: 50000000
+  min_price_yen: 200
+  exclude_negative_equity: true
+
+screen:
+  selection_strategy: value_dislocation
+  minimum_volatility_60d: 0.35
+  minimum_average_intraday_range_20d: 0.025
+  minimum_daytrade_activity_score: 50
+  quantitative_min_score: 42
+  max_review_queue: 50
+  min_score: 62
+  max_candidates: 12
+  max_event_age_days: 365
+  require_approved_external_event: true
+  require_forecast: false
+  minimum_externality: 0.60
+  minimum_temporary_probability: 0.55
+  minimum_catalyst_probability: 0.35
+  minimum_equity_ratio: 0.30
+  minimum_operating_cf_positive_ratio_3y: 0.6667
+  minimum_sales_cagr_3y: -0.05
+  minimum_operating_margin: 0.00
+  require_sales_history: false
+  maximum_forecast_op_decline: -0.20
+  minimum_drawdown_52w: -0.18
+  minimum_relative_underperformance_6m: -0.08
+  use_relative_underperformance_filter: true
+  market_benchmark_mode: auto
+  relative_filter_when_topix_missing: skip_with_warning
+  require_dividend: false
+  minimum_annual_dividend_per_share: 0
+  minimum_forecast_dividend_yield: 0.00
+  maximum_forecast_dividend_yield: 0.10
+  maximum_payout_ratio: 0.80
+  exclude_forecast_dividend_cut: false
+
+risk:
+  trading_capital_yen: 3000000
+  max_total_invested_ratio: 0.60
+  max_positions: 6
+  max_position_ratio: 0.10
+  max_sector_ratio: 0.25
+  risk_per_position_ratio: 0.008
+  catastrophic_stop_pct: 0.22
+  take_profit_pct: 0.35
+  board_lot: 100
+  entry_tranches:
+    - {weight: 0.40, discount_from_close: 0.02}
+    - {weight: 0.30, discount_from_close: 0.07}
+    - {weight: 0.30, discount_from_close: 0.12}
+
+orders:
+  mode: preview_only
+  execution_channel: manual_sbi
+  generation_enabled: false
+  require_portfolio_snapshot: true
+  require_buying_power: true
+  require_approval_hash: true
+  proposal_valid_hours: 12
+
+backtest:
+  top_n: 6
+  initial_capital_yen: 3000000
+  transaction_cost_bps: 10
+  rebalance_frequency: M

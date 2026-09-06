@@ -1,0 +1,135 @@
+schema_version: '1.0'
+blueprint_name: japanese-equity-value-dislocation-research
+blueprint_version: 0.6.8
+canonical_project: stock-value-dislocation-verification-system
+purpose: Generate a local-first Japanese equity research application that retrieves
+  actual market and financial data, searches listed companies, creates a quantitative
+  review queue, and stops before broker order entry.
+required_capabilities:
+- jquants_v2_actual_data_fetch
+- jquants_v2_equity_bars_date_or_code_contract
+- jquants_adaptive_serial_rate_limit_backoff
+- jquants_resumable_daily_cache
+- jquants_subscription_window_detection_and_clamping
+- japanese_stock_code_and_name_search
+- daily_price_history_and_topix_relative_return
+- financial_summary_normalization
+- earnings_calendar
+- quantitative_shortlist
+- external_event_human_review_queue
+- provenance_manifest_and_hashes
+- demo_actual_data_isolation
+- local_streamlit_dashboard
+- reproducible_windows_setup
+- topix_relative_return_without_fallback_substitution
+- explainable_required_checks_and_warnings
+- screening_funnel_and_quantitative_audit
+- data_freshness_order_preview_gate
+- beginner_safe_standard_value_presets
+- interactive_hard_filter_controls
+- instant_local_rescreen_without_api_call
+- condition_profile_save_load_and_export
+- candidate_and_near_miss_explanations
+- apply_button_screening_form
+- precomputed_security_feature_snapshot
+- parquet_fast_read_with_csv_fallback
+- incremental_resumable_market_data_update
+- sbi_screening_csv_import_and_match
+- latest_external_daily_trend_recheck_for_shortlist
+- three_month_trend_transition_classification
+- stock_detail_price_ma20_ma50_ma200_chart
+- strict_quality_star_badge
+non_negotiable_invariants:
+- sbi_order_transmission_disabled
+- sbi_browser_automation_disabled
+- sbi_credentials_forbidden
+- actual_data_must_have_manifest
+- concurrent_jquants_range_helpers_forbidden_for_full_sync
+- completed_api_days_must_be_resumable_after_429
+- requested_dates_must_be_clamped_to_subscription_coverage
+- sample_data_must_never_be_labeled_actual
+- external_event_review_required_before_order_preview
+- human_order_approval_required
+- secrets_must_not_be_copied_into_generated_apps
+- topix_missing_must_never_be_replaced_with_security_return
+- stale_data_must_block_order_preview_eligibility
+- every_shortlist_row_must_explain_passes_and_limitations
+- interactive_rescreen_must_use_certified_curated_snapshot
+- condition_changes_must_not_trigger_jquants_fetch
+- saved_user_profiles_must_not_be_copied_into_generated_apps
+- condition_widgets_must_not_recompute_until_apply
+- sbi_csv_bridge_must_not_require_credentials
+- external_latest_trend_must_not_modify_point_in_time_screening_score
+- trend_transition_must_compare_prior_and_current_states
+- quality_star_must_not_override_negative_core_checks
+required_files:
+- AGENTS.md
+- HARNESS.md
+- README.md
+- dashboard.py
+- pyproject.toml
+- setup_windows.cmd
+- run_real.cmd
+- start_dashboard.cmd
+- check_harness.cmd
+- generate_similar_app.cmd
+- config/real_data.yaml
+- config/default.yaml
+- scripts/generate_app.py
+- scripts/harness_check.py
+- src/value_dislocation/data/jquants.py
+- src/value_dislocation/data/snapshot.py
+- src/value_dislocation/data/search.py
+- src/value_dislocation/real_pipeline.py
+- docs/16_APP_GENERATOR.md
+- src/value_dislocation/strategy/criteria.py
+- src/value_dislocation/strategy/profiles.py
+- src/value_dislocation/data/performance.py
+- src/value_dislocation/data/sbi_import.py
+- src/value_dislocation/decision/trend.py
+- src/value_dislocation/decision/buy_readiness.py
+- docs/17_BEGINNER_CONDITION_UI.md
+runtime_state_exclusions:
+- .env
+- .venv
+- .git
+- .pytest_cache
+- __pycache__
+- outputs
+- data/raw
+- data/curated
+- data/staged
+- data/reviews
+- data/portfolio
+- generated
+- config/user_profiles
+acceptance_commands:
+- setup_windows.cmd
+- check_harness.cmd
+- generate_similar_app.cmd
+- run_real.cmd
+
+ui_requirements:
+  instant_preset_parameter_sync: true
+  candidate_to_stock_detail_navigation: true
+  navigation_uses_session_state: true
+
+  dividend_screening: true
+  dividend_cash_estimator: true
+
+benchmark_policy:
+  mode: auto
+  official_first: true
+  proxy_codes: [1306, 1475, 1305]
+  adjusted_close_required: true
+  proxy_must_be_labelled: true
+  disable_when_unavailable: true
+
+  purchase_decision_support:
+    enabled: true
+    recommendation_mode: conditional_human_review_only
+    require_manual_checks: true
+    split_entry_preview: true
+    order_transmission: false
+    moving_average_chart: [20, 50, 200]
+    quality_star_badge: true
