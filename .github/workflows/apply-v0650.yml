@@ -1,0 +1,201 @@
+name: Apply v0.6.50 pastel theme
+
+on:
+  push:
+    branches:
+      - feature/v0.6.50-pastel-pop
+    paths:
+      - .github/workflows/apply-v0650.yml
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+
+      - name: Apply v0.6.50 changes
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          dashboard = Path('dashboard.py')
+          source = dashboard.read_text(encoding='utf-8')
+          start = source.index('        /* Soft pastel theme: presentation only. Analysis and scoring are unchanged. */')
+          end = source.index('        </style>\n        """,', start)
+          vivid_css = '''        /* Vivid pastel theme: presentation only. Analysis and scoring are unchanged. */
+                  .stApp {
+                      background:
+                          radial-gradient(circle at 6% 6%, rgba(255, 137, 184, .72) 0, rgba(255, 137, 184, 0) 30%),
+                          radial-gradient(circle at 94% 8%, rgba(176, 150, 255, .72) 0, rgba(176, 150, 255, 0) 32%),
+                          radial-gradient(circle at 90% 88%, rgba(112, 218, 255, .66) 0, rgba(112, 218, 255, 0) 31%),
+                          radial-gradient(circle at 12% 90%, rgba(255, 210, 112, .58) 0, rgba(255, 210, 112, 0) 28%),
+                          linear-gradient(135deg, #fff0f7 0%, #fff4d9 27%, #f1e9ff 55%, #e7f9ff 78%, #edfff4 100%);
+                      background-attachment: fixed;
+                  }
+                  [data-testid="stSidebar"] {
+                      background:
+                          radial-gradient(circle at 15% 8%, rgba(255, 119, 177, .38), transparent 30%),
+                          linear-gradient(180deg, #ffd4e7 0%, #eadcff 38%, #d9f5ff 70%, #e8ffe9 100%);
+                      border-right: 2px solid #ef9fc8;
+                      box-shadow: 8px 0 26px rgba(157, 90, 164, .18);
+                  }
+                  h1 { color: #7d3f75 !important; text-shadow: 0 2px 0 rgba(255,255,255,.92), 0 5px 16px rgba(201,84,157,.18); }
+                  h2 { color: #68468a !important; }
+                  h3 { color: #9c4674 !important; }
+                  h1, h2, h3 { letter-spacing: .018em; }
+                  p, label, [data-testid="stCaptionContainer"] { color: #5f4d60; }
+
+                  [data-testid="stMetric"], [data-testid="stExpander"],
+                  [data-testid="stForm"], div[data-testid="stVerticalBlockBorderWrapper"] {
+                      border-radius: 22px !important;
+                  }
+                  [data-testid="stMetric"] {
+                      background: linear-gradient(145deg, rgba(255,255,255,.96), rgba(255,225,239,.88) 42%, rgba(230,221,255,.88) 100%);
+                      border: 2px solid #f0a8ce;
+                      padding: .76rem .9rem;
+                      box-shadow: 0 10px 26px rgba(177, 90, 159, .18), inset 0 1px 0 rgba(255,255,255,.92);
+                  }
+                  [data-testid="stMetricValue"] { color: #733e6d !important; font-weight: 760 !important; }
+                  [data-testid="stMetricLabel"] { color: #865775 !important; font-weight: 650 !important; }
+
+                  [data-testid="stExpander"] {
+                      background: linear-gradient(135deg, rgba(255,246,251,.94), rgba(243,236,255,.90));
+                      border: 2px solid #e7b6dd !important;
+                      box-shadow: 0 7px 20px rgba(152, 91, 159, .12);
+                  }
+                  div[data-testid="stVerticalBlockBorderWrapper"] {
+                      background: linear-gradient(135deg, rgba(255,247,252,.76), rgba(233,248,255,.70));
+                      border-color: #eab6d7 !important;
+                      box-shadow: 0 8px 22px rgba(136, 98, 158, .09);
+                  }
+
+                  .stButton > button, .stDownloadButton > button {
+                      border-radius: 999px !important;
+                      border: 2px solid #e98fbe !important;
+                      background: linear-gradient(115deg, #ffb8d5 0%, #ffd6a6 28%, #d9c5ff 58%, #afe8ff 82%, #c5f5cf 100%) !important;
+                      color: #68445f !important;
+                      font-weight: 760 !important;
+                      box-shadow: 0 7px 18px rgba(176, 83, 151, .20), inset 0 1px 0 rgba(255,255,255,.75) !important;
+                      transition: transform .14s ease, box-shadow .14s ease, filter .14s ease;
+                  }
+                  .stButton > button:hover, .stDownloadButton > button:hover {
+                      border-color: #d96aa5 !important;
+                      background: linear-gradient(115deg, #ff9fc8 0%, #ffc989 28%, #cbb0ff 58%, #91dcff 82%, #a9edb8 100%) !important;
+                      box-shadow: 0 10px 24px rgba(164, 70, 142, .27) !important;
+                      transform: translateY(-2px) scale(1.01);
+                      filter: saturate(1.08);
+                  }
+                  .stButton > button[kind="primary"] {
+                      background: linear-gradient(115deg, #ff8fbd 0%, #ffc275 30%, #bda0ff 60%, #79d5ff 100%) !important;
+                      color: #57354f !important;
+                      border: 2px solid #db72ad !important;
+                      box-shadow: 0 8px 22px rgba(161, 71, 144, .25) !important;
+                  }
+
+                  div[data-baseweb="select"] > div,
+                  [data-testid="stTextInput"] input,
+                  [data-testid="stNumberInput"] input,
+                  [data-testid="stTextArea"] textarea {
+                      border-radius: 16px !important;
+                      background: linear-gradient(135deg, rgba(255,255,255,.97), rgba(255,238,248,.92)) !important;
+                      border: 2px solid #e9afd1 !important;
+                  }
+                  div[data-baseweb="select"] > div:focus-within,
+                  [data-testid="stTextInput"] input:focus,
+                  [data-testid="stNumberInput"] input:focus,
+                  [data-testid="stTextArea"] textarea:focus {
+                      border-color: #b990ef !important;
+                      box-shadow: 0 0 0 3px rgba(190, 143, 238, .28), 0 5px 16px rgba(194, 109, 181, .12) !important;
+                  }
+
+                  [data-testid="stTabs"] [data-baseweb="tab-list"] {
+                      gap: .42rem;
+                      background: linear-gradient(90deg, rgba(255,205,226,.82), rgba(231,215,255,.84), rgba(202,239,255,.82));
+                      border: 2px solid #ebb4d6;
+                      border-radius: 999px;
+                      padding: .34rem .44rem;
+                      box-shadow: 0 7px 18px rgba(153, 90, 153, .13);
+                  }
+                  [data-testid="stTabs"] button[role="tab"] {
+                      border-radius: 999px !important;
+                      color: #77516f !important;
+                      font-weight: 680 !important;
+                  }
+                  [data-testid="stTabs"] button[role="tab"][aria-selected="true"] {
+                      background: linear-gradient(115deg, #ff9fc8 0%, #ffd08f 35%, #c7aeff 68%, #9fe1ff 100%) !important;
+                      color: #58384f !important;
+                      box-shadow: 0 4px 12px rgba(145, 71, 141, .18) !important;
+                  }
+
+                  [data-testid="stDataFrame"], [data-testid="stDataEditor"] {
+                      border-radius: 18px !important;
+                      overflow: hidden;
+                      border: 2px solid #eab2d5;
+                      box-shadow: 0 7px 20px rgba(146, 87, 148, .10);
+                  }
+                  [data-testid="stAlert"] {
+                      border-radius: 20px !important;
+                      border: 2px solid #e5b0d3 !important;
+                      box-shadow: 0 5px 16px rgba(145, 90, 144, .09);
+                  }
+                  [data-testid="stProgress"] > div > div > div > div {
+                      background: linear-gradient(90deg, #ff91bf 0%, #ffc978 27%, #b99cff 55%, #79d9ff 78%, #98e8b4 100%) !important;
+                  }
+                  hr { border-color: #e9acd0 !important; opacity: .85; }
+          '''
+          dashboard.write_text(source[:start] + vivid_css + source[end:], encoding='utf-8')
+
+          pyproject = Path('pyproject.toml')
+          pyproject.write_text(pyproject.read_text(encoding='utf-8').replace('version = "0.6.41"', 'version = "0.6.50"'), encoding='utf-8')
+
+          readme = Path('README.md')
+          readme_text = readme.read_text(encoding='utf-8').replace('Version: **0.6.41**', 'Version: **0.6.50**')
+          readme_note = '''## v0.6.50 パステルモード強調\n\n- 「やわらかパステル」をテスト用に、より鮮やかなピンク／オレンジ／ラベンダー／水色／ミントの多色パステルへ強化しました。\n- 背景、サイドバー、カード、タブ、ボタン、入力欄、表、プログレス表示の彩度・輪郭・影を強めています。\n- 変更はテーマ表示だけに限定し、候補抽出・スコア・データ取得・注文関連ロジックには影響しません。\n\n'''
+          readme.write_text(readme_note + readme_text, encoding='utf-8')
+
+          changelog = Path('CHANGELOG.md')
+          changelog_entry = '''## v0.6.50\n- テスト用の「やわらかパステル」テーマを、ピンク／オレンジ／ラベンダー／水色／ミントの多色パステルへ大幅に強調。\n- 背景・サイドバー・メトリクス・カード・タブ・ボタン・入力欄・表・アラート・プログレス表示の彩度、境界線、影を強化。\n- パステルテーマ分岐内のCSSだけを変更し、標準テーマと分析・スコア・データ取得ロジックは変更なし。\n\n'''
+          changelog.write_text(changelog_entry + changelog.read_text(encoding='utf-8'), encoding='utf-8')
+
+          test_file = Path('tests/test_dashboard_theme_and_rule_selector.py')
+          test_text = test_file.read_text(encoding='utf-8')
+          old = '''    for token in (\n        "#ffeaf3",\n        "#f5edff",\n        "#eaf8ff",\n        "#ffe4ef",\n        "#f3e7ff",\n        "#e5f6ff",'''
+          new = '''    for token in (\n        "#ffd4e7",\n        "#eadcff",\n        "#d9f5ff",\n        "#ffb8d5",\n        "#ffd6a6",\n        "#c5f5cf",\n        "saturate(1.08)",\n        "scale(1.01)",'''
+          if old not in test_text:
+              raise RuntimeError('Expected pastel regression token block was not found')
+          test_file.write_text(test_text.replace(old, new), encoding='utf-8')
+          PY
+
+      - name: Install project and development dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[dashboard,dev]"
+
+      - name: Run pytest
+        run: python -m pytest tests/
+
+      - name: Run harness checks
+        run: python scripts/harness_check.py
+
+      - name: Commit v0.6.50 changes and remove bootstrap workflow
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -f .github/workflows/apply-v0650.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m 'Implement vivid pastel theme for v0.6.50'
+          git push origin HEAD:feature/v0.6.50-pastel-pop
