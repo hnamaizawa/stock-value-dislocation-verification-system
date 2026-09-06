@@ -611,6 +611,56 @@ def _open_stock_detail(code: str) -> None:
     st.switch_page(STOCK_DETAIL_PAGE)
 
 
+def _sorted_clickable_table_frame(frame: pd.DataFrame, key: str) -> pd.DataFrame:
+    """Sort a custom clickable table using state set by its header buttons."""
+    if frame.empty:
+        return frame.reset_index(drop=True)
+    sort_column = st.session_state.get(f"{key}_sort_column")
+    if not sort_column or sort_column not in frame.columns:
+        return frame.reset_index(drop=True)
+    ascending = bool(st.session_state.get(f"{key}_sort_ascending", True))
+    work = frame.copy()
+    series = work[sort_column]
+    non_null = series.notna()
+    numeric = pd.to_numeric(series, errors="coerce")
+    if bool(non_null.any()) and bool(numeric.loc[non_null].notna().all()):
+        sort_value = numeric
+    else:
+        sort_value = series.fillna("").astype(str).str.casefold()
+    work["__ui_sort_missing__"] = series.isna()
+    work["__ui_sort_value__"] = sort_value
+    work = work.sort_values(
+        ["__ui_sort_missing__", "__ui_sort_value__"],
+        ascending=[True, ascending],
+        kind="mergesort",
+    )
+    return work.drop(columns=["__ui_sort_missing__", "__ui_sort_value__"]).reset_index(drop=True)
+
+
+def _sortable_header_button(container, label: str, field: str, key: str) -> None:
+    """Render a table header that toggles ascending/descending sort."""
+    column_state = f"{key}_sort_column"
+    ascending_state = f"{key}_sort_ascending"
+    active_field = st.session_state.get(column_state)
+    active_ascending = bool(st.session_state.get(ascending_state, True))
+    if active_field == field:
+        marker = " ▲" if active_ascending else " ▼"
+    else:
+        marker = " ↕"
+    if container.button(
+        f"{label}{marker}",
+        key=f"{key}_sort_header_{field}",
+        width="stretch",
+        help="クリックで昇順／降順を切り替えます。",
+    ):
+        if active_field == field:
+            st.session_state[ascending_state] = not active_ascending
+        else:
+            st.session_state[column_state] = field
+            st.session_state[ascending_state] = True
+        st.rerun()
+
+
 def _render_history_stock_buttons(
     frame: pd.DataFrame,
     key: str,
@@ -629,7 +679,7 @@ def _render_history_stock_buttons(
         return
 
     if caption:
-        st.caption("銘柄コードまたは企業名ボタンをクリックすると、個別銘柄検索へ移動します。")
+        st.caption("銘柄コードまたは企業名ボタンをクリックすると、個別銘柄検索へ移動します。列名をクリックすると昇順／降順を切り替えられます。")
 
     display_frame = frame.reset_index(drop=True)
     preferred = {
@@ -640,10 +690,10 @@ def _render_history_stock_buttons(
     }
     meta_cols = [c for c in preferred.get(key, []) if c in display_frame.columns][:5]
     header = st.columns([1.1, 2.5] + [1.15] * len(meta_cols))
-    header[0].markdown("**コード**")
-    header[1].markdown("**企業名**")
+    _sortable_header_button(header[0], "コード", "code", key)
+    _sortable_header_button(header[1], "企業名", "name", key)
     for col, name in zip(header[2:], meta_cols):
-        col.markdown(f"**{name}**")
+        _sortable_header_button(col, name, name, key)
 
     for idx, row in display_frame.iterrows():
         code = str(row.get("code", ""))
@@ -673,14 +723,16 @@ def _render_history_stock_buttons(
 
 def _render_clickable_candidates(shortlist: pd.DataFrame) -> None:
     """Render candidate code and company name as navigation buttons."""
-    st.caption("銘柄コードまたは企業名をクリックすると、個別銘柄検索へ移動します。")
+    st.caption("銘柄コードまたは企業名をクリックすると、個別銘柄検索へ移動します。列名をクリックすると昇順／降順を切り替えられます。")
+    score_field = "strategy_score" if "strategy_score" in shortlist.columns else "quantitative_score"
+    display_shortlist = _sorted_clickable_table_frame(shortlist, "clickable_candidates")
     header = st.columns([1, 3, 1, 1, 1])
-    header[0].markdown("**コード**")
-    header[1].markdown("**企業名**")
-    header[2].markdown("**市場**")
-    header[3].markdown("**終値**")
-    header[4].markdown("**スコア**")
-    for idx, row in shortlist.reset_index(drop=True).iterrows():
+    for col, (label, field) in zip(
+        header,
+        [("コード", "code"), ("企業名", "name"), ("市場", "market"), ("終値", "close"), ("スコア", score_field)],
+    ):
+        _sortable_header_button(col, label, field, "clickable_candidates")
+    for idx, row in display_shortlist.iterrows():
         code = str(row.get("code", ""))
         display_code = display_tse_code(code)
         name = str(row.get("name", ""))
@@ -900,10 +952,16 @@ def _render_latest_candidate_trends(score_passed: pd.DataFrame, *, star_only: bo
         st.info("現在の最新トレンド判定では、☆条件に該当する銘柄はありません。")
         return result
 
+    result = _sorted_clickable_table_frame(result, "unified_candidates")
     header = st.columns([1.15, 1.0, 2.4, 0.8, 1.0, 1.0, 1.6, 1.6, 1.35])
-    for col, label in zip(header, ["評価", "コード", "企業名", "スコア", "分析終値", "最新株価", "最新判定", "変化", "仮説警告"]):
-        col.markdown(f"**{label}**")
-    for idx, item in result.reset_index(drop=True).iterrows():
+    unified_headers = [
+        ("評価", "直感判定"), ("コード", "コード"), ("企業名", "企業名"),
+        ("スコア", "定量スコア"), ("分析終値", "分析終値"), ("最新株価", "最新株価"),
+        ("最新判定", "最新判定"), ("変化", "変化"), ("仮説警告", "仮説警告"),
+    ]
+    for col, (label, field) in zip(header, unified_headers):
+        _sortable_header_button(col, label, field, "unified_candidates")
+    for idx, item in result.iterrows():
         cols = st.columns([1.15, 1.0, 2.4, 0.8, 1.0, 1.0, 1.6, 1.6, 1.35])
         cols[0].write(str(item["直感判定"]))
         if cols[1].button(str(item["コード"]), key=f"unified_candidate_code_{idx}_{item['raw_code']}", width="stretch"):
@@ -1664,6 +1722,7 @@ def _render_history_daily(evaluation_signature) -> None:
         sort_cols,
         ascending=[False, False] if len(sort_cols) == 2 else False,
     ) if sort_cols else hist[[c for c in cols if c in hist.columns]]
+    sorted_hist = _sorted_clickable_table_frame(sorted_hist, "daily_history")
     page = _history_page_slice(sorted_hist, "daily_history", default_size=50, compact_sizes=True)
     _render_history_stock_buttons(page, "daily_history")
 
@@ -1701,6 +1760,7 @@ def _render_history_evaluations(evaluation: pd.DataFrame) -> None:
             st.caption("現在の検索条件に該当する評価履歴を ◎☆ / ◎ / ○ / △ / × などの件数で比較します。")
             st.bar_chart(symbol_chart, width="stretch")
     sorted_e = e.sort_values("evaluation_date", ascending=False)
+    sorted_e = _sorted_clickable_table_frame(sorted_e, "evaluation_history")
     evaluation_page = _history_page_slice(sorted_e, "evaluation_history", default_size=50, compact_sizes=True)
     _render_history_stock_buttons(evaluation_page, "evaluation_history")
 
@@ -1784,6 +1844,7 @@ def _render_history_star_validation(evaluation: pd.DataFrame) -> None:
         summary = summary.sort_values(["first_star_date", "code"], ascending=[True, True])
     else:
         summary = summary.sort_values(["latest_star_date", "code"], ascending=[False, True])
+    summary = _sorted_clickable_table_frame(summary, "star_summary")
     summary_page = _history_page_slice(summary, "star_summary", default_size=50, compact_sizes=True)
     _render_history_stock_buttons(summary_page, "star_summary")
     st.caption("return_*_avg は同じ銘柄の◎☆開始イベントのうち、その期間の実績が確定済みのものだけを平均した値（%）です。completed_*d は平均に含めたイベント数です。")
@@ -1795,6 +1856,7 @@ def _render_history_star_validation(evaluation: pd.DataFrame) -> None:
                 event_show[f"return_{h}d"] = pd.to_numeric(event_show[f"return_{h}d"], errors="coerce") * 100
         event_cols = ["star_date", "code", "name", "entry_price", "return_30d", "return_90d", "return_180d", "actual_days_30d", "actual_days_90d", "actual_days_180d"]
         event_show = event_show[[c for c in event_cols if c in event_show.columns]].sort_values(["star_date", "code"], ascending=[False, True])
+        event_show = _sorted_clickable_table_frame(event_show, "star_events_detail")
         event_page = _history_page_slice(event_show, "star_events_detail", default_size=50, compact_sizes=True)
         _render_history_stock_buttons(event_page, "star_events_detail")
         st.caption("個別表示はイベント単位です。同じ銘柄が◎☆から外れた後に再び◎☆になった場合は別イベントとして複数行表示されます。")
