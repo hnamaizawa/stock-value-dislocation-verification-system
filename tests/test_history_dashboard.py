@@ -96,7 +96,8 @@ def test_star_validation_reconciles_all_events_and_has_explicit_pager():
     assert 'button("◀ 前へ"' in text
     assert 'button("次へ ▶"' in text
     assert '全 {len(frame):,}件を表示対象にしています' in text
-    assert 'default_size=50, compact_sizes=True' in text
+    assert 'default_size: int = 50' in text
+    assert 'compact_sizes: bool = True' in text
     assert 'st.segmented_control("並び順", ["最新◎☆日の新しい順", "初回◎☆日の古い順"]' in text
     assert 'checkbox("◎☆開始イベントを個別表示する"' in text
 
@@ -119,15 +120,20 @@ def test_history_stock_tables_use_same_button_navigation_as_candidates():
     assert 'button(display_code' in text
     assert 'button(name or display_code' in text
     assert '_open_stock_detail(code)' in text
-    assert '_render_history_stock_buttons(page, "daily_history")' in text
-    assert '_render_history_stock_buttons(evaluation_page, "evaluation_history")' in text
-    assert '_render_history_stock_buttons(summary_page, "star_summary")' in text
-    assert '_render_history_stock_buttons(event_page, "star_events_detail")' in text
+    assert '_render_history_stock_buttons(page, key)' in text
+    assert '_render_history_sortable_stock_table(sorted_hist, "daily_history")' in text
+    assert '_render_history_sortable_stock_table(sorted_e, "evaluation_history")' in text
+    assert '_render_history_sortable_stock_table(summary, "star_summary")' in text
+    assert '_render_history_sortable_stock_table(event_show, "star_events_detail")' in text
     assert '銘柄コードまたは企業名ボタンをクリックすると、個別銘柄検索へ移動します。' in text
 
 
 def test_history_button_lists_keep_paging_compact_for_performance():
     text = Path("dashboard.py").read_text(encoding="utf-8")
-    assert '_history_page_slice(sorted_hist, "daily_history", default_size=50, compact_sizes=True)' in text
-    assert '_history_page_slice(sorted_e, "evaluation_history", default_size=50, compact_sizes=True)' in text
+    assert 'def _render_history_sortable_stock_table(' in text
+    assert 'default_size: int = 50' in text
+    assert 'compact_sizes: bool = True' in text
+    assert 'page = _history_page_slice(' in text
+    assert 'default_size=default_size' in text
+    assert 'compact_sizes=compact_sizes' in text
     assert 'with st.expander("現在ページの全列を表形式で確認"' in text
