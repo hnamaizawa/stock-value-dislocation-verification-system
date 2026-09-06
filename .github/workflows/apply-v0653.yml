@@ -1,5 +1,5 @@
 name: Apply v0.6.53 sort performance and README restructure
-# retry: v0.6.52 source-shape tests updated for fragment architecture
+# retry: remove temporary patch scripts before pytest/harness
 
 on:
   push:
@@ -30,6 +30,8 @@ jobs:
         run: |
           python scripts/_apply_v0653.py
           python scripts/_fix_v0653_test.py
+          rm scripts/_apply_v0653.py
+          rm scripts/_fix_v0653_test.py
 
       - name: Install project and development dependencies
         run: |
@@ -42,11 +44,9 @@ jobs:
       - name: Run harness checks
         run: python scripts/harness_check.py
 
-      - name: Commit v0.6.53 changes and remove temporary files
+      - name: Commit v0.6.53 changes and remove temporary workflow
         run: |
           rm -rf src/*.egg-info
-          rm scripts/_apply_v0653.py
-          rm scripts/_fix_v0653_test.py
           rm .github/workflows/apply-v0653.yml
           git config user.name "hnamaizawa"
           git config user.email "hnamaizawa@gmail.com"
