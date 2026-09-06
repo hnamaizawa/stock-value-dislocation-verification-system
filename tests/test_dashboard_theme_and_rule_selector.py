@@ -20,12 +20,14 @@ def test_soft_pastel_theme_is_more_pastel_and_scoped_to_theme_branch():
     assert guard in source
     pastel_source = source[source.index(guard):]
     for token in (
-        "#ffeaf3",
-        "#f5edff",
-        "#eaf8ff",
-        "#ffe4ef",
-        "#f3e7ff",
-        "#e5f6ff",
+        "#ffd4e7",
+        "#eadcff",
+        "#d9f5ff",
+        "#ffb8d5",
+        "#ffd6a6",
+        "#c5f5cf",
+        "saturate(1.08)",
+        "scale(1.01)",
         'data-testid="stTabs"',
         'data-testid="stMetric"',
         'data-testid="stDataFrame"',

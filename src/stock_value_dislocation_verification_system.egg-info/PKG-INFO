@@ -1,3 +1,28 @@
+Metadata-Version: 2.4
+Name: stock-value-dislocation-verification-system
+Version: 0.6.50
+Summary: 日本株の価格乖離を実データと最新外部日足で調査し、投資判断の検証を支援するシステム
+Requires-Python: >=3.11
+Description-Content-Type: text/markdown
+Requires-Dist: pandas<3,>=2.2
+Requires-Dist: numpy<3,>=1.26
+Requires-Dist: pydantic<3,>=2.7
+Requires-Dist: PyYAML<7,>=6.0
+Requires-Dist: typer<1,>=0.12
+Requires-Dist: rich<15,>=13.7
+Requires-Dist: python-dotenv<2,>=1.0
+Requires-Dist: python-dateutil<3,>=2.9
+Requires-Dist: jquants-api-client<3,>=2.1
+Requires-Dist: pyarrow<22,>=17
+Provides-Extra: dashboard
+Requires-Dist: streamlit==1.53.0; extra == "dashboard"
+Requires-Dist: plotly<7,>=5.22; extra == "dashboard"
+Requires-Dist: yfinance<2,>=1.0; extra == "dashboard"
+Requires-Dist: deep-translator<2,>=1.11; extra == "dashboard"
+Provides-Extra: dev
+Requires-Dist: pytest<9,>=8.2; extra == "dev"
+Requires-Dist: ruff<1,>=0.5; extra == "dev"
+
 ## v0.6.50 パステルモード強調
 
 - 「やわらかパステル」をテスト用に、より鮮やかなピンク／オレンジ／ラベンダー／水色／ミントの多色パステルへ強化しました。
