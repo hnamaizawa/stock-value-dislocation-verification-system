@@ -1,5 +1,5 @@
 name: Apply v0.6.53 sort performance and README restructure
-# retry: generated regression tests corrected
+# retry: v0.6.52 source-shape tests updated for fragment architecture
 
 on:
   push:
@@ -50,7 +50,10 @@ jobs:
           rm .github/workflows/apply-v0653.yml
           git config user.name "hnamaizawa"
           git config user.email "hnamaizawa@gmail.com"
-          git add dashboard.py pyproject.toml README.md CHANGELOG.md tests/test_sort_performance_and_readme_structure.py
+          git add dashboard.py pyproject.toml README.md CHANGELOG.md \
+            tests/test_sort_performance_and_readme_structure.py \
+            tests/test_history_dashboard.py \
+            tests/test_sortable_clickable_tables.py
           git add -u scripts/_apply_v0653.py scripts/_fix_v0653_test.py .github/workflows/apply-v0653.yml
           git commit -m "v0.6.53 improve sort responsiveness and README structure"
           git push origin feature/v0.6.53-sort-performance-readme
