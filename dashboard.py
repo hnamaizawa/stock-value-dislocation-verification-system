@@ -2671,7 +2671,7 @@ def render_stock_search() -> None:
                     if item.get("original_summary"):
                         st.write(item["original_summary"])
             if url:
-                st.link_button("記事を開く", url, key=f"news_link_{company['code']}_{index}")
+                st.link_button("記事を開く", url)
 
     display_code = display_tse_code(company["code"])
     link_cols = st.columns(3)

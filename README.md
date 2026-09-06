@@ -32,7 +32,7 @@
 
 # Stock Value Dislocation Verification System
 
-Version: **0.6.50**
+Version: **0.6.51**
 
 日本株について、株価・決算・TOPIX比較から「業績が大きく崩れていない一方で、株価が低迷している可能性がある企業」を探すローカル調査アプリです。
 
