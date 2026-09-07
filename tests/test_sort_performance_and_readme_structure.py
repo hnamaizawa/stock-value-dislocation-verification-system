@@ -29,10 +29,12 @@ def test_readme_has_single_top_level_version_history_in_descending_order():
     readme = Path("README.md").read_text(encoding="utf-8")
     lines = readme.splitlines()
     assert lines[0] == "# Stock Value Dislocation Verification System"
-    assert lines[2] == "Version: **0.6.53**"
+    assert lines[2] == "Version: **0.6.55**"
     assert readme.count("## 開発履歴（新しい順）") == 1
     assert "Version: **0.6.51**" not in readme
     versions = [
+        "### v0.6.55 履歴画面の generic timedelta 警告修正",
+        "### v0.6.54 履歴実績から定量抽出ルールを安全に自動改善",
         "### v0.6.53 ソート高速化・README再構成",
         "### v0.6.52 一覧表の列クリックソート復活",
         "### v0.6.51 Streamlit 1.53.0 互換性修正",
