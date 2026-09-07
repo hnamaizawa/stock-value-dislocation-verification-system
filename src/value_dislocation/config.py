@@ -20,6 +20,13 @@ def load_config(path: str | Path) -> dict[str, Any]:
     missing = required - set(data)
     if missing:
         raise ConfigError(f"設定ファイルに不足があります: {sorted(missing)}")
+
+    # Learned rules are a runtime overlay only. The source YAML remains the stable
+    # baseline, so every automatic change is inspectable and reversible.
+    if bool(data.get("rule_learning", {}).get("enabled", False)):
+        from value_dislocation.strategy.rule_learning import refresh_and_apply_rule_learning
+
+        data = refresh_and_apply_rule_learning(config_path, data)
     return data
 
 
