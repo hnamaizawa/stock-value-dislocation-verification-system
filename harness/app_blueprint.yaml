@@ -1,6 +1,6 @@
 schema_version: '1.0'
 blueprint_name: japanese-equity-value-dislocation-research
-blueprint_version: 0.6.8
+blueprint_version: 0.6.54
 canonical_project: stock-value-dislocation-verification-system
 purpose: Generate a local-first Japanese equity research application that retrieves
   actual market and financial data, searches listed companies, creates a quantitative
@@ -39,6 +39,10 @@ required_capabilities:
 - three_month_trend_transition_classification
 - stock_detail_price_ma20_ma50_ma200_chart
 - strict_quality_star_badge
+- point_in_time_history_rule_learning
+- out_of_sample_rule_validation
+- bounded_reversible_runtime_rule_overlay
+- automatic_quantitative_rule_improvement
 non_negotiable_invariants:
 - sbi_order_transmission_disabled
 - sbi_browser_automation_disabled
@@ -62,6 +66,12 @@ non_negotiable_invariants:
 - external_latest_trend_must_not_modify_point_in_time_screening_score
 - trend_transition_must_compare_prior_and_current_states
 - quality_star_must_not_override_negative_core_checks
+- learned_rule_changes_must_not_trigger_market_data_fetch
+- learned_rules_must_use_point_in_time_history
+- learned_rules_must_require_out_of_sample_validation
+- learned_rules_must_be_bounded_and_reversible
+- human_external_event_thresholds_must_not_be_auto_learned
+- source_yaml_must_not_be_rewritten_by_rule_learning
 required_files:
 - AGENTS.md
 - HARNESS.md
@@ -84,6 +94,7 @@ required_files:
 - docs/16_APP_GENERATOR.md
 - src/value_dislocation/strategy/criteria.py
 - src/value_dislocation/strategy/profiles.py
+- src/value_dislocation/strategy/rule_learning.py
 - src/value_dislocation/data/performance.py
 - src/value_dislocation/data/sbi_import.py
 - src/value_dislocation/decision/trend.py
@@ -101,6 +112,7 @@ runtime_state_exclusions:
 - data/staged
 - data/reviews
 - data/portfolio
+- data/history/rule_learning
 - generated
 - config/user_profiles
 acceptance_commands:
