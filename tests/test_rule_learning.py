@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from datetime import timedelta
 from pathlib import Path
 
 import pandas as pd
@@ -65,7 +66,7 @@ def _write_synthetic_history(project_root: Path, *, count: int = 100) -> None:
     start = pd.Timestamp("2024-01-01")
     for i in range(count):
         code = f"{10000 + i}"
-        day = start + pd.Timedelta(days=i * 2)
+        day = start + timedelta(days=int(i * 2))
         good = i % 2 == 0
         drawdown = -0.25 if good else -0.19
         rows.append(
@@ -91,9 +92,9 @@ def _write_synthetic_history(project_root: Path, *, count: int = 100) -> None:
             }
         )
         prices.append({"date": day.date().isoformat(), "code": code, "close": 100.0})
-        prices.append({"date": (day + pd.Timedelta(days=30)).date().isoformat(), "code": code, "close": 105.0 if good else 99.0})
-        prices.append({"date": (day + pd.Timedelta(days=90)).date().isoformat(), "code": code, "close": 120.0 if good else 96.0})
-        prices.append({"date": (day + pd.Timedelta(days=180)).date().isoformat(), "code": code, "close": 125.0 if good else 95.0})
+        prices.append({"date": (day + timedelta(days=30)).date().isoformat(), "code": code, "close": 105.0 if good else 99.0})
+        prices.append({"date": (day + timedelta(days=90)).date().isoformat(), "code": code, "close": 120.0 if good else 96.0})
+        prices.append({"date": (day + timedelta(days=180)).date().isoformat(), "code": code, "close": 125.0 if good else 95.0})
     pd.DataFrame(rows).to_csv(
         analysis_dir / "2024-01-01.csv.gz", index=False, compression="gzip"
     )
