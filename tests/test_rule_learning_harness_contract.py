@@ -45,7 +45,7 @@ def test_rule_learning_documentation_explains_human_review_boundary():
     assert "自動変更しません" in doc
     assert "ネットワークアクセスを行いません" in doc
     assert "時系列の前70%を学習、後30%を検証" in doc
-    assert "config/real_data.yaml 自体を書き換えません" in doc
+    assert "`config/real_data.yaml` 自体を書き換えません" in doc
 
 
 def test_status_script_requires_explicit_reset_flag():
