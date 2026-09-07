@@ -28,6 +28,22 @@ screen:
   minimum_drawdown_52w: -0.18
   minimum_relative_underperformance_6m: -0.08
 
+# Demo/sample config never auto-learns. Actual-data config enables the guarded learner.
+rule_learning:
+  enabled: false
+  auto_apply: false
+  primary_horizon_days: 90
+  minimum_mature_events: 40
+  minimum_train_events: 20
+  minimum_validation_events: 10
+  train_fraction: 0.70
+  minimum_event_gap_days: 30
+  minimum_mean_return_improvement: 0.02
+  minimum_positive_rate_improvement: 0.00
+  minimum_candidate_retention: 0.35
+  maximum_confirmation_mean_decline: 0.01
+  cooldown_days: 30
+
 risk:
   trading_capital_yen: 3000000
   max_total_invested_ratio: 0.60
