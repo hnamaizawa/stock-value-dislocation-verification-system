@@ -4,6 +4,7 @@ import html
 import json
 import os
 import time
+from datetime import timedelta
 from pathlib import Path
 
 import pandas as pd
@@ -1517,7 +1518,7 @@ def _render_history_daily(evaluation_signature) -> None:
     c1, c2, c3, c4 = st.columns([2, 2, 2, 2])
     period = c1.date_input(
         "期間",
-        value=(max(first_day, last_day - pd.Timedelta(days=30).to_pytimedelta()), last_day),
+        value=(max(first_day, last_day - timedelta(days=30)), last_day),
         min_value=first_day,
         max_value=last_day,
         key="history_period",

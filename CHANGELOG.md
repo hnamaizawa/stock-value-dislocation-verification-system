@@ -1,3 +1,9 @@
+## v0.6.55
+- 「履歴・実績検証」の期間初期値で残っていた `pd.Timedelta(days=30).to_pytimedelta()` を Python 標準の `datetime.timedelta(days=30)` へ変更。
+- NumPy の generic timedelta DeprecationWarning が Streamlit 再実行時に大量出力される問題を解消。
+- 警告の抑制ではなく原因式を除去し、同じ非推奨表現が dashboard.py に再導入されない回帰テストを追加。
+- 抽出条件、履歴データ、J-Quants / Yahoo データ取得、安全境界は変更なし。
+
 ## v0.6.53
 - 一覧のソート状態更新を `on_click` コールバックへ移し、明示的な追加 `st.rerun()` を廃止して1クリックあたりの再実行回数を削減。
 - 候補一覧、統合候補一覧、履歴一覧を `st.fragment` 化し、ソート時の再実行範囲を表部分へ限定。統合候補一覧ではYahoo最新トレンド取得・再判定をソート時に再実行しない構成へ変更。
