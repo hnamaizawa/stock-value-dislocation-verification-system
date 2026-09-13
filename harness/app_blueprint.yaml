@@ -1,6 +1,6 @@
 schema_version: '1.0'
 blueprint_name: japanese-equity-value-dislocation-research
-blueprint_version: 0.6.55
+blueprint_version: 0.6.56
 canonical_project: stock-value-dislocation-verification-system
 purpose: Generate a local-first Japanese equity research application that retrieves
   actual market and financial data, searches listed companies, creates a quantitative
@@ -43,6 +43,7 @@ required_capabilities:
 - out_of_sample_rule_validation
 - bounded_reversible_runtime_rule_overlay
 - automatic_quantitative_rule_improvement
+- history_stock_detail_new_tab_navigation
 non_negotiable_invariants:
 - sbi_order_transmission_disabled
 - sbi_browser_automation_disabled
@@ -72,6 +73,7 @@ non_negotiable_invariants:
 - learned_rules_must_be_bounded_and_reversible
 - human_external_event_thresholds_must_not_be_auto_learned
 - source_yaml_must_not_be_rewritten_by_rule_learning
+- history_stock_detail_must_open_new_tab_without_mutating_history_session
 required_files:
 - AGENTS.md
 - HARNESS.md
@@ -125,6 +127,7 @@ ui_requirements:
   instant_preset_parameter_sync: true
   candidate_to_stock_detail_navigation: true
   navigation_uses_session_state: true
+  history_stock_detail_opens_new_tab: true
 
   dividend_screening: true
   dividend_cash_estimator: true
