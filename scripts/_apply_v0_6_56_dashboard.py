@@ -1,0 +1,25 @@
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+PATH = ROOT / "dashboard.py"
+text = PATH.read_text(encoding="utf-8")
+
+
+def replace_once(old: str, new: str) -> None:
+    global text
+    count = text.count(old)
+    if count != 1:
+        raise RuntimeError(f"expected one match, got {count}: {old[:100]!r}")
+    text = text.replace(old, new, 1)
+
+
+replace_once("from pathlib import Path\n\nimport pandas as pd", "from pathlib import Path\nfrom urllib.parse import urlencode, urlsplit, urlunsplit\n\nimport pandas as pd")
+replace_once('DEMO_OUTPUT = ROOT / "outputs"\n', 'DEMO_OUTPUT = ROOT / "outputs"\nSTOCK_DETAIL_URL_PATH = "render_stock_search"\n')
+replace_once('''def _open_stock_detail(code: str) -> None:\n    """Navigate to the stock detail page and preselect the requested code."""\n    normalized = display_tse_code(str(code))\n    st.session_state["stock_query"] = normalized\n    st.session_state["stock_selected_code"] = str(code)\n    st.switch_page(STOCK_DETAIL_PAGE)\n\n\n''', '''def _open_stock_detail(code: str) -> None:\n    """Navigate in the current tab and preselect the requested code."""\n    normalized = display_tse_code(str(code))\n    st.session_state["stock_query"] = normalized\n    st.session_state["stock_selected_code"] = str(code)\n    st.switch_page(STOCK_DETAIL_PAGE)\n\n\ndef _history_stock_detail_url(code: str) -> str:\n    """Build an absolute stock-detail URL for a separate browser tab."""\n    current = urlsplit(str(st.context.url))\n    current_path = current.path.rstrip("/")\n    app_root = current_path.rsplit("/", 1)[0] if "/" in current_path else ""\n    stock_path = f"{app_root}/{STOCK_DETAIL_URL_PATH}" if app_root else f"/{STOCK_DETAIL_URL_PATH}"\n    query = urlencode({"code": str(code).strip()})\n    return urlunsplit((current.scheme, current.netloc, stock_path, query, ""))\n\n\n''')
+replace_once('''    """Render paged history rows with the same button navigation as candidates.\n\n    The history screens intentionally render only the current page as buttons.\n    This keeps the interaction consistent with the unified candidate list while\n    avoiding thousands of widgets for the full history at once.  The complete\n    current page is still available in a compact reference table below.\n    """''', '''    """Render paged history rows with stock details opened in a new browser tab.\n\n    The history screens intentionally render only the current page as links.\n    Opening stock detail in a separate Streamlit session keeps the filtered/sorted\n    history tab intact while the user inspects and closes individual stock tabs.\n    """''')
+replace_once('        st.caption("銘柄コードまたは企業名ボタンをクリックすると、個別銘柄検索へ移動します。列名をクリックすると昇順／降順を切り替えられます。")', '        st.caption("銘柄コードまたは企業名をクリックすると、個別銘柄検索を新しいタブで開きます。元の履歴一覧はそのまま残ります。列名をクリックすると昇順／降順を切り替えられます。")')
+replace_once('''        cols = st.columns([1.1, 2.5] + [1.15] * len(meta_cols))\n        if cols[0].button(display_code, key=f"{key}_code_{idx}_{code}", width="stretch"):\n            _open_stock_detail(code)\n        if cols[1].button(name or display_code, key=f"{key}_name_{idx}_{code}", width="stretch"):\n            _open_stock_detail(code)\n        for col, field in zip(cols[2:], meta_cols):''', '''        cols = st.columns([1.1, 2.5] + [1.15] * len(meta_cols))\n        stock_url = _history_stock_detail_url(code)\n        cols[0].link_button(display_code, stock_url, width="stretch", help="個別銘柄検索を新しいブラウザタブで開きます。")\n        cols[1].link_button(name or display_code, stock_url, width="stretch", help="個別銘柄検索を新しいブラウザタブで開きます。")\n        for col, field in zip(cols[2:], meta_cols):''')
+replace_once('''def render_stock_search() -> None:\n    bundle = _bundle_or_none()\n    if bundle is None:\n        st.warning("先に「データ更新」タブで実データを取得してください。")\n        return\n    data = bundle["data"]\n    st.subheader("会社名・証券コードで検索")''', '''def _seed_stock_search_from_query_params() -> None:\n    """Initialize a new stock-search session from a history-link query parameter."""\n    requested = str(st.query_params.get("code", "")).strip()\n    if not requested or st.session_state.get("_stock_query_param_code") == requested:\n        return\n    st.session_state["_stock_query_param_code"] = requested\n    st.session_state["stock_query"] = display_tse_code(requested)\n    st.session_state["stock_selected_code"] = requested\n    st.session_state["stock_search_candidates"] = []\n    st.session_state["stock_search_candidate_query"] = ""\n    st.session_state["stock_search_no_match"] = ""\n\n\ndef render_stock_search() -> None:\n    bundle = _bundle_or_none()\n    if bundle is None:\n        st.warning("先に「データ更新」タブで実データを取得してください。")\n        return\n    data = bundle["data"]\n    _seed_stock_search_from_query_params()\n    st.subheader("会社名・証券コードで検索")''')
+replace_once('STOCK_DETAIL_PAGE = st.Page(render_stock_search, title="個別銘柄検索", icon=":material/search:")', 'STOCK_DETAIL_PAGE = st.Page(render_stock_search, title="個別銘柄検索", icon=":material/search:", url_path=STOCK_DETAIL_URL_PATH)')
+PATH.write_text(text, encoding="utf-8")
+print("dashboard patch applied")
