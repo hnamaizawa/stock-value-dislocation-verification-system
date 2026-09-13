@@ -6,6 +6,7 @@ import os
 import time
 from datetime import timedelta
 from pathlib import Path
+from urllib.parse import urlencode, urlsplit, urlunsplit
 
 import pandas as pd
 import streamlit as st
@@ -92,6 +93,7 @@ PROFILE_DIR = ROOT / "config" / "user_profiles"
 EXTERNAL_REVIEW_DIR = ROOT / "config" / "external_event_reviews"
 UI_PREFERENCES_PATH = ROOT / "config" / "ui_preferences.json"
 DEMO_OUTPUT = ROOT / "outputs"
+STOCK_DETAIL_URL_PATH = "render_stock_search"
 
 st.set_page_config(page_title="Stock Value Dislocation Verification System", layout="wide")
 
@@ -605,11 +607,21 @@ def _bundle_or_none() -> dict | None:
 
 
 def _open_stock_detail(code: str) -> None:
-    """Navigate to the stock detail page and preselect the requested code."""
+    """Navigate in the current tab and preselect the requested code."""
     normalized = display_tse_code(str(code))
     st.session_state["stock_query"] = normalized
     st.session_state["stock_selected_code"] = str(code)
     st.switch_page(STOCK_DETAIL_PAGE)
+
+
+def _history_stock_detail_url(code: str) -> str:
+    """Build an absolute stock-detail URL for a separate browser tab."""
+    current = urlsplit(str(st.context.url))
+    current_path = current.path.rstrip("/")
+    app_root = current_path.rsplit("/", 1)[0] if "/" in current_path else ""
+    stock_path = f"{app_root}/{STOCK_DETAIL_URL_PATH}" if app_root else f"/{STOCK_DETAIL_URL_PATH}"
+    query = urlencode({"code": str(code).strip()})
+    return urlunsplit((current.scheme, current.netloc, stock_path, query, ""))
 
 
 def _sorted_clickable_table_frame(frame: pd.DataFrame, key: str) -> pd.DataFrame:
@@ -671,19 +683,18 @@ def _render_history_stock_buttons(
     *,
     caption: bool = True,
 ) -> None:
-    """Render paged history rows with the same button navigation as candidates.
+    """Render paged history rows with stock details opened in a new browser tab.
 
-    The history screens intentionally render only the current page as buttons.
-    This keeps the interaction consistent with the unified candidate list while
-    avoiding thousands of widgets for the full history at once.  The complete
-    current page is still available in a compact reference table below.
+    The history screens intentionally render only the current page as links.
+    Opening stock detail in a separate Streamlit session keeps the filtered/sorted
+    history tab intact while the user inspects and closes individual stock tabs.
     """
     if frame.empty or "code" not in frame.columns:
         st.dataframe(frame, width="stretch", hide_index=True)
         return
 
     if caption:
-        st.caption("銘柄コードまたは企業名ボタンをクリックすると、個別銘柄検索へ移動します。列名をクリックすると昇順／降順を切り替えられます。")
+        st.caption("銘柄コードまたは企業名をクリックすると、個別銘柄検索を新しいタブで開きます。元の履歴一覧はそのまま残ります。列名をクリックすると昇順／降順を切り替えられます。")
 
     display_frame = frame.reset_index(drop=True)
     preferred = {
@@ -706,10 +717,9 @@ def _render_history_stock_buttons(
         display_code = display_tse_code(code)
         name = str(row.get("name", ""))
         cols = st.columns([1.1, 2.5] + [1.15] * len(meta_cols))
-        if cols[0].button(display_code, key=f"{key}_code_{idx}_{code}", width="stretch"):
-            _open_stock_detail(code)
-        if cols[1].button(name or display_code, key=f"{key}_name_{idx}_{code}", width="stretch"):
-            _open_stock_detail(code)
+        stock_url = _history_stock_detail_url(code)
+        cols[0].link_button(display_code, stock_url, width="stretch", help="個別銘柄検索を新しいブラウザタブで開きます。")
+        cols[1].link_button(name or display_code, stock_url, width="stretch", help="個別銘柄検索を新しいブラウザタブで開きます。")
         for col, field in zip(cols[2:], meta_cols):
             value = row.get(field)
             if pd.isna(value):
@@ -2007,12 +2017,26 @@ def _choose_stock_candidate_dialog() -> None:
         st.rerun()
 
 
+def _seed_stock_search_from_query_params() -> None:
+    """Initialize a new stock-search session from a history-link query parameter."""
+    requested = str(st.query_params.get("code", "")).strip()
+    if not requested or st.session_state.get("_stock_query_param_code") == requested:
+        return
+    st.session_state["_stock_query_param_code"] = requested
+    st.session_state["stock_query"] = display_tse_code(requested)
+    st.session_state["stock_selected_code"] = requested
+    st.session_state["stock_search_candidates"] = []
+    st.session_state["stock_search_candidate_query"] = ""
+    st.session_state["stock_search_no_match"] = ""
+
+
 def render_stock_search() -> None:
     bundle = _bundle_or_none()
     if bundle is None:
         st.warning("先に「データ更新」タブで実データを取得してください。")
         return
     data = bundle["data"]
+    _seed_stock_search_from_query_params()
     st.subheader("会社名・証券コードで検索")
     st.caption("企業名は部分一致・表記ゆれ・軽い入力ミスを含むあいまい検索に対応します。複数候補の場合は選択画面を表示します。")
 
@@ -2784,7 +2808,7 @@ def render_demo() -> None:
 
 DATA_PAGE = st.Page(render_data_status_and_update, title="データ更新", icon=":material/sync:", default=True)
 CONDITION_PAGE = st.Page(render_condition_builder, title="条件設定・候補", icon=":material/tune:")
-STOCK_DETAIL_PAGE = st.Page(render_stock_search, title="個別銘柄検索", icon=":material/search:")
+STOCK_DETAIL_PAGE = st.Page(render_stock_search, title="個別銘柄検索", icon=":material/search:", url_path=STOCK_DETAIL_URL_PATH)
 HISTORY_PAGE = st.Page(render_history_and_validation, title="履歴・検証", icon=":material/history:")
 SBI_IMPORT_PAGE = st.Page(render_sbi_csv_import, title="SBI CSV取込", icon=":material/upload_file:")
 DEMO_PAGE = st.Page(render_demo, title="デモ", icon=":material/science:")

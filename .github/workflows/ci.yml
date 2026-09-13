@@ -14,7 +14,7 @@ concurrency:
   cancel-in-progress: true
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   test:
@@ -22,25 +22,8 @@ jobs:
     timeout-minutes: 20
 
     steps:
-      - name: Check out feature branch for bootstrap
+      - name: Check out repository
         uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.pull_request.head.ref }}
-          fetch-depth: 0
-
-      - name: Apply v0.6.56 implementation and restore normal CI
-        if: github.event_name == 'pull_request'
-        run: |
-          python scripts/_apply_v0_6_56_dashboard.py
-          python scripts/_apply_v0_6_56_tests.py
-          python scripts/_apply_v0_6_56_meta.py
-          git show origin/main:.github/workflows/ci.yml > .github/workflows/ci.yml
-          rm scripts/_apply_v0_6_56_dashboard.py scripts/_apply_v0_6_56_tests.py scripts/_apply_v0_6_56_meta.py
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -A
-          git commit -m "Implement v0.6.56 history stock new-tab navigation"
-          git push origin HEAD:${{ github.event.pull_request.head.ref }}
 
       - name: Set up Python
         uses: actions/setup-python@v5

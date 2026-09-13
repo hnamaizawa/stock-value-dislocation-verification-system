@@ -1,3 +1,11 @@
+## v0.6.56 history stock detail new tab
+
+- [x] 履歴・実績検証の銘柄コード／企業名を新しいブラウザタブで開く。
+- [x] 元の履歴タブの検索・ページ・ソート状態を保持する。
+- [x] URLクエリで銘柄コードを新しいStreamlitセッションへ引き渡し、自動表示する。
+- [x] 条件設定・候補画面の既存の同一タブ遷移を維持する。
+- [x] 回帰テストとHarness契約を追加する。
+
 ## v0.6.19 stronger soft-pastel theme
 
 - [x] Increase pastel feel with pink, lavender, pale blue, and cream background layers.

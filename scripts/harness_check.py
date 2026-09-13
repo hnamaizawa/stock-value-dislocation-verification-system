@@ -393,6 +393,7 @@ def check_blueprint(root: Path) -> CheckResult:
         "sample_data_must_never_be_labeled_actual",
         "external_event_review_required_before_order_preview",
         "saved_user_profiles_must_not_be_copied_into_generated_apps",
+        "history_stock_detail_must_open_new_tab_without_mutating_history_session",
     }
     invariants = set(blueprint.get("non_negotiable_invariants", []))
     required_files = blueprint.get("required_files", [])
@@ -445,6 +446,34 @@ def check_instant_preset_and_candidate_navigation(root: Path) -> CheckResult:
     )
 
 
+
+
+def check_history_stock_new_tab_navigation(root: Path) -> CheckResult:
+    dashboard = (root / "dashboard.py").read_text(encoding="utf-8")
+    start = dashboard.index("def _render_history_stock_buttons(")
+    end = dashboard.index("@st.fragment\ndef _render_history_sortable_stock_table(", start)
+    history_block = dashboard[start:end]
+    required = [
+        "def _history_stock_detail_url", "st.context.url", "urlencode",
+        "_history_stock_detail_url(code)", ".link_button(",
+        'st.query_params.get("code", "")', 'url_path=STOCK_DETAIL_URL_PATH', "新しいタブ",
+    ]
+    missing = [token for token in required if token not in dashboard]
+    same_tab_history_call = "_open_stock_detail(code)" in history_block
+    candidate_navigation_preserved = (
+        'def _render_clickable_candidates(' in dashboard
+        and '_open_stock_detail(code)' in dashboard
+        and 'st.switch_page(STOCK_DETAIL_PAGE)' in dashboard
+    )
+    passed = not missing and not same_tab_history_call and candidate_navigation_preserved
+    return CheckResult(
+        "history_stock_new_tab_navigation", passed,
+        json.dumps({
+            "missing": missing,
+            "same_tab_history_call": same_tab_history_call,
+            "candidate_navigation_preserved": candidate_navigation_preserved,
+        }, ensure_ascii=False),
+    )
 
 
 def check_dividend_screening(root: Path) -> CheckResult:
@@ -640,6 +669,7 @@ def run_checks(root: Path, include_pytest: bool = True) -> list[CheckResult]:
         check_latest_trend_count_reconciliation(root),
         check_fast_interactive_screening(root),
         check_instant_preset_and_candidate_navigation(root),
+        check_history_stock_new_tab_navigation(root),
         check_dividend_screening(root),
         check_sbi_csv_bridge(root),
         check_translated_news_and_analyst_help(root),

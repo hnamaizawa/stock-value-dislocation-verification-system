@@ -26,6 +26,9 @@ def test_history_tables_sort_before_pagination_and_keep_navigation_buttons():
     assert '_render_history_sortable_stock_table(sorted_e, "evaluation_history")' in text
     assert '_render_history_sortable_stock_table(summary, "star_summary")' in text
     assert '_render_history_sortable_stock_table(event_show, "star_events_detail")' in text
-    assert 'button(display_code' in text
-    assert 'button(name or display_code' in text
-    assert '_open_stock_detail(code)' in text
+    history_start = text.index("def _render_history_stock_buttons(")
+    history_end = text.index("@st.fragment\ndef _render_history_sortable_stock_table(", history_start)
+    history_block = text[history_start:history_end]
+    assert history_block.count('.link_button(') == 2
+    assert '_history_stock_detail_url(code)' in history_block
+    assert '_open_stock_detail(code)' not in history_block
