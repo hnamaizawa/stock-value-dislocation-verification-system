@@ -614,7 +614,7 @@ def _open_stock_detail(code: str) -> None:
     st.switch_page(STOCK_DETAIL_PAGE)
 
 
-def _history_stock_detail_url(code: str) -> str:
+def _stock_detail_new_tab_url(code: str) -> str:
     """Build an absolute stock-detail URL for a separate browser tab."""
     current = urlsplit(str(st.context.url))
     current_path = current.path.rstrip("/")
@@ -717,7 +717,7 @@ def _render_history_stock_buttons(
         display_code = display_tse_code(code)
         name = str(row.get("name", ""))
         cols = st.columns([1.1, 2.5] + [1.15] * len(meta_cols))
-        stock_url = _history_stock_detail_url(code)
+        stock_url = _stock_detail_new_tab_url(code)
         cols[0].link_button(display_code, stock_url, width="stretch", help="個別銘柄検索を新しいブラウザタブで開きます。")
         cols[1].link_button(name or display_code, stock_url, width="stretch", help="個別銘柄検索を新しいブラウザタブで開きます。")
         for col, field in zip(cols[2:], meta_cols):
@@ -756,8 +756,8 @@ def _render_history_sortable_stock_table(
 
 @st.fragment
 def _render_clickable_candidates(shortlist: pd.DataFrame) -> None:
-    """Render candidate code and company name as navigation buttons."""
-    st.caption("銘柄コードまたは企業名をクリックすると、個別銘柄検索へ移動します。列名をクリックすると昇順／降順を切り替えられます。")
+    """Render candidate code and company name as new-tab stock-detail links."""
+    st.caption("銘柄コードまたは企業名をクリックすると、個別銘柄検索を新しいタブで開きます。元の候補一覧はそのまま残ります。列名をクリックすると昇順／降順を切り替えられます。")
     score_field = "strategy_score" if "strategy_score" in shortlist.columns else "quantitative_score"
     display_shortlist = _sorted_clickable_table_frame(shortlist, "clickable_candidates")
     header = st.columns([1, 3, 1, 1, 1])
@@ -766,27 +766,27 @@ def _render_clickable_candidates(shortlist: pd.DataFrame) -> None:
         [("コード", "code"), ("企業名", "name"), ("市場", "market"), ("終値", "close"), ("スコア", score_field)],
     ):
         _sortable_header_button(col, label, field, "clickable_candidates")
-    for idx, row in display_shortlist.iterrows():
+    for _, row in display_shortlist.iterrows():
         code = str(row.get("code", ""))
         display_code = display_tse_code(code)
         name = str(row.get("name", ""))
         cols = st.columns([1, 3, 1, 1, 1])
-        if cols[0].button(
+        stock_url = _stock_detail_new_tab_url(code)
+        cols[0].link_button(
             display_code,
-            key=f"candidate_code_{idx}_{code}",
+            stock_url,
             width="stretch",
-        ):
-            _open_stock_detail(code)
-        if cols[1].button(
-            name,
-            key=f"candidate_name_{idx}_{code}",
+            help="個別銘柄検索を新しいブラウザタブで開きます。",
+        )
+        cols[1].link_button(
+            name or display_code,
+            stock_url,
             width="stretch",
-        ):
-            _open_stock_detail(code)
+            help="個別銘柄検索を新しいブラウザタブで開きます。",
+        )
         cols[2].write(str(row.get("market", "-")))
         cols[3].write(f"¥{_format_number(row.get('close'))}")
         cols[4].write(_format_number(row.get("strategy_score", row.get("quantitative_score")), 1))
-
 
 @st.fragment
 def _render_unified_candidate_table(result: pd.DataFrame, *, active_mode: bool) -> None:
@@ -800,13 +800,23 @@ def _render_unified_candidate_table(result: pd.DataFrame, *, active_mode: bool) 
     ]
     for col, (label, field) in zip(header, unified_headers):
         _sortable_header_button(col, label, field, "unified_candidates")
-    for idx, item in display_result.iterrows():
+    for _, item in display_result.iterrows():
         cols = st.columns([1.15, 1.0, 2.4, 0.8, 1.0, 1.0, 1.6, 1.6, 1.35])
         cols[0].write(str(item["直感判定"]))
-        if cols[1].button(str(item["コード"]), key=f"unified_candidate_code_{idx}_{item['raw_code']}", width="stretch"):
-            _open_stock_detail(str(item["raw_code"]))
-        if cols[2].button(str(item["企業名"]), key=f"unified_candidate_name_{idx}_{item['raw_code']}", width="stretch"):
-            _open_stock_detail(str(item["raw_code"]))
+        raw_code = str(item["raw_code"])
+        stock_url = _stock_detail_new_tab_url(raw_code)
+        cols[1].link_button(
+            str(item["コード"]),
+            stock_url,
+            width="stretch",
+            help="個別銘柄検索を新しいブラウザタブで開きます。",
+        )
+        cols[2].link_button(
+            str(item["企業名"]) or str(item["コード"]),
+            stock_url,
+            width="stretch",
+            help="個別銘柄検索を新しいブラウザタブで開きます。",
+        )
         cols[3].write(_format_number(item.get("定量スコア"), 1))
         cols[4].write(f"¥{_format_number(item.get('分析終値'))}")
         cols[5].write("-" if pd.isna(item.get("最新株価")) else f"¥{_format_number(item.get('最新株価'), 1)}")
@@ -823,7 +833,6 @@ def _render_unified_candidate_table(result: pd.DataFrame, *, active_mode: bool) 
             st.caption(str(item["判断メモ"]))
     st.caption("Yahoo Finance系の最新情報は候補抽出スコア自体には混入しません。SBI証券の現在値・板・最新開示で最終確認してください。")
 
-
 def _render_latest_candidate_trends(score_passed: pd.DataFrame, *, star_only: bool = False, analysis_as_of=None) -> pd.DataFrame:
     """Render one unified candidate list with quantitative and latest-trend data.
 
@@ -837,7 +846,7 @@ def _render_latest_candidate_trends(score_passed: pd.DataFrame, *, star_only: bo
     st.markdown("### 統合候補一覧（抽出条件 + 最新トレンド）")
     st.caption(
         "抽出条件を通過した全銘柄を母集団に、同じ行へYahoo Finance系の最新日足による再判定を統合しています。"
-        "外部データ取得に失敗しても銘柄は消さず『判定不能』として残します。銘柄コードまたは企業名をクリックすると個別画面へ移動します。"
+        "外部データ取得に失敗しても銘柄は消さず『判定不能』として残します。銘柄コードまたは企業名をクリックすると個別銘柄検索を新しいタブで開きます。元の候補一覧はそのまま残ります。"
     )
     if active_mode:
         st.info("⚡は取得済みスナップショットで値動きが活発だった候補です。最新Yahoo系日足で現在の値動きも同じ一覧内で再確認します。")

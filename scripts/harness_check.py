@@ -425,10 +425,9 @@ def check_instant_preset_and_candidate_navigation(root: Path) -> CheckResult:
     dashboard = (root / "dashboard.py").read_text(encoding="utf-8")
     required = [
         'on_change=_on_preset_change',
-        'def _open_stock_detail',
-        'unified_candidate_code_',
-        'unified_candidate_name_',
-        'st.switch_page(STOCK_DETAIL_PAGE)',
+        'def _stock_detail_new_tab_url',
+        'st.context.url',
+        'st.query_params.get("code", "")',
         'key="stock_query"',
         'st.navigation(',
         'position="top"',
@@ -445,36 +444,60 @@ def check_instant_preset_and_candidate_navigation(root: Path) -> CheckResult:
         "ok" if passed else "missing=" + ", ".join(missing) + " forbidden=" + ", ".join(found_forbidden),
     )
 
-
-
-
 def check_history_stock_new_tab_navigation(root: Path) -> CheckResult:
     dashboard = (root / "dashboard.py").read_text(encoding="utf-8")
     start = dashboard.index("def _render_history_stock_buttons(")
     end = dashboard.index("@st.fragment\ndef _render_history_sortable_stock_table(", start)
     history_block = dashboard[start:end]
     required = [
-        "def _history_stock_detail_url", "st.context.url", "urlencode",
-        "_history_stock_detail_url(code)", ".link_button(",
+        "def _stock_detail_new_tab_url", "st.context.url", "urlencode",
+        "_stock_detail_new_tab_url(code)", ".link_button(",
         'st.query_params.get("code", "")', 'url_path=STOCK_DETAIL_URL_PATH', "新しいタブ",
     ]
     missing = [token for token in required if token not in dashboard]
     same_tab_history_call = "_open_stock_detail(code)" in history_block
-    candidate_navigation_preserved = (
-        'def _render_clickable_candidates(' in dashboard
-        and '_open_stock_detail(code)' in dashboard
-        and 'st.switch_page(STOCK_DETAIL_PAGE)' in dashboard
-    )
-    passed = not missing and not same_tab_history_call and candidate_navigation_preserved
+    passed = not missing and not same_tab_history_call and history_block.count(".link_button(") == 2
     return CheckResult(
         "history_stock_new_tab_navigation", passed,
         json.dumps({
             "missing": missing,
             "same_tab_history_call": same_tab_history_call,
-            "candidate_navigation_preserved": candidate_navigation_preserved,
+            "link_button_count": history_block.count(".link_button("),
         }, ensure_ascii=False),
     )
 
+
+def check_candidate_stock_new_tab_navigation(root: Path) -> CheckResult:
+    dashboard = (root / "dashboard.py").read_text(encoding="utf-8")
+    candidate_start = dashboard.index("def _render_clickable_candidates(")
+    candidate_end = dashboard.index("@st.fragment\ndef _render_unified_candidate_table(", candidate_start)
+    candidate_block = dashboard[candidate_start:candidate_end]
+    unified_start = dashboard.index("def _render_unified_candidate_table(")
+    unified_end = dashboard.index("def _render_latest_candidate_trends(", unified_start)
+    unified_block = dashboard[unified_start:unified_end]
+    required = [
+        "_stock_detail_new_tab_url(code)",
+        "_stock_detail_new_tab_url(raw_code)",
+        "元の候補一覧はそのまま残ります",
+    ]
+    missing = [token for token in required if token not in dashboard]
+    same_tab_calls = [
+        token for token in ("_open_stock_detail(code)", '_open_stock_detail(str(item["raw_code"]))')
+        if token in candidate_block or token in unified_block
+    ]
+    link_counts = {
+        "candidate": candidate_block.count(".link_button("),
+        "unified": unified_block.count(".link_button("),
+    }
+    passed = not missing and not same_tab_calls and link_counts == {"candidate": 2, "unified": 2}
+    return CheckResult(
+        "candidate_stock_new_tab_navigation", passed,
+        json.dumps({
+            "missing": missing,
+            "same_tab_calls": same_tab_calls,
+            "link_counts": link_counts,
+        }, ensure_ascii=False),
+    )
 
 def check_dividend_screening(root: Path) -> CheckResult:
     jquants = (root / "src/value_dislocation/data/jquants.py").read_text(encoding="utf-8")
@@ -670,6 +693,7 @@ def run_checks(root: Path, include_pytest: bool = True) -> list[CheckResult]:
         check_fast_interactive_screening(root),
         check_instant_preset_and_candidate_navigation(root),
         check_history_stock_new_tab_navigation(root),
+        check_candidate_stock_new_tab_navigation(root),
         check_dividend_screening(root),
         check_sbi_csv_bridge(root),
         check_translated_news_and_analyst_help(root),

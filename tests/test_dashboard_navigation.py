@@ -6,10 +6,10 @@ ROOT = Path(__file__).resolve().parents[1]
 def test_preset_updates_widgets_immediately_and_top_navigation_is_wired():
     text = (ROOT / "dashboard.py").read_text(encoding="utf-8")
     assert "on_change=_on_preset_change" in text
-    assert "def _open_stock_detail" in text
-    assert "st.switch_page(STOCK_DETAIL_PAGE)" in text
-    assert "unified_candidate_code_" in text
-    assert "unified_candidate_name_" in text
+    assert "def _stock_detail_new_tab_url" in text
+    assert "st.context.url" in text
+    assert 'st.query_params.get("code", "")' in text
+    assert "個別銘柄検索を新しいタブで開きます" in text
     assert 'key="stock_query"' in text
     assert "st.navigation(" in text
     assert 'position="top"' in text
