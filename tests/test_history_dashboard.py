@@ -137,8 +137,7 @@ def test_history_stock_tables_open_stock_search_in_new_tab_and_keep_history_inta
 def test_candidate_lists_open_stock_search_in_new_tab_and_keep_candidate_context():
     text = Path("dashboard.py").read_text(encoding="utf-8")
     candidate_start = text.index("def _render_clickable_candidates(")
-    candidate_end = text.index("@st.fragment
-def _render_unified_candidate_table(", candidate_start)
+    candidate_end = text.index("@st.fragment\ndef _render_unified_candidate_table(", candidate_start)
     candidate_block = text[candidate_start:candidate_end]
     unified_start = text.index("def _render_unified_candidate_table(")
     unified_end = text.index("def _render_latest_candidate_trends(", unified_start)
@@ -152,6 +151,7 @@ def _render_unified_candidate_table(", candidate_start)
     assert '元の候補一覧はそのまま残ります' in text
     assert 'st.context.url' in text
     assert 'st.query_params.get("code", "")' in text
+
 
 def test_history_button_lists_keep_paging_compact_for_performance():
     text = Path("dashboard.py").read_text(encoding="utf-8")
