@@ -8,8 +8,12 @@ def test_dashboard_uses_one_unified_candidate_list_with_latest_external_history(
     assert "スコア通過銘柄の最新トレンド再判定" not in text
     assert "_latest_external_history" in text
     assert "build_trend_transition" in text
-    assert "unified_candidate_code_" in text
-    assert "unified_candidate_name_" in text
+    start = text.index("def _render_unified_candidate_table(")
+    end = text.index("def _render_latest_candidate_trends(", start)
+    unified_block = text[start:end]
+    assert unified_block.count(".link_button(") == 2
+    assert "_stock_detail_new_tab_url(raw_code)" in unified_block
+    assert "_open_stock_detail(" not in unified_block
 
 
 def test_latest_trend_recheck_has_no_hidden_twenty_stock_cap():
