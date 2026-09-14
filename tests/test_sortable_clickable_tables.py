@@ -30,5 +30,5 @@ def test_history_tables_sort_before_pagination_and_keep_navigation_buttons():
     history_end = text.index("@st.fragment\ndef _render_history_sortable_stock_table(", history_start)
     history_block = text[history_start:history_end]
     assert history_block.count('.link_button(') == 2
-    assert '_history_stock_detail_url(code)' in history_block
+    assert '_stock_detail_new_tab_url(code)' in history_block
     assert '_open_stock_detail(code)' not in history_block

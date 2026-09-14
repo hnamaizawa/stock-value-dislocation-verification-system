@@ -119,7 +119,7 @@ def test_history_stock_tables_open_stock_search_in_new_tab_and_keep_history_inta
     history_block = text[start:end]
     assert 'selection_mode="single-row"' not in history_block
     assert 'on_select="rerun"' not in history_block
-    assert '_history_stock_detail_url(code)' in history_block
+    assert '_stock_detail_new_tab_url(code)' in history_block
     assert history_block.count('.link_button(') == 2
     assert '_open_stock_detail(code)' not in history_block
     assert '個別銘柄検索を新しいタブで開きます' in history_block
@@ -134,18 +134,24 @@ def test_history_stock_tables_open_stock_search_in_new_tab_and_keep_history_inta
     assert '_render_history_sortable_stock_table(event_show, "star_events_detail")' in text
 
 
-def test_candidate_lists_keep_existing_same_tab_navigation():
+def test_candidate_lists_open_stock_search_in_new_tab_and_keep_candidate_context():
     text = Path("dashboard.py").read_text(encoding="utf-8")
     candidate_start = text.index("def _render_clickable_candidates(")
-    candidate_end = text.index("@st.fragment\ndef _render_unified_candidate_table(", candidate_start)
+    candidate_end = text.index("@st.fragment
+def _render_unified_candidate_table(", candidate_start)
     candidate_block = text[candidate_start:candidate_end]
     unified_start = text.index("def _render_unified_candidate_table(")
     unified_end = text.index("def _render_latest_candidate_trends(", unified_start)
     unified_block = text[unified_start:unified_end]
-    assert '_open_stock_detail(code)' in candidate_block
-    assert '_open_stock_detail(str(item["raw_code"]))' in unified_block
-    assert 'st.switch_page(STOCK_DETAIL_PAGE)' in text
-
+    assert candidate_block.count('.link_button(') == 2
+    assert '_stock_detail_new_tab_url(code)' in candidate_block
+    assert '_open_stock_detail(code)' not in candidate_block
+    assert unified_block.count('.link_button(') == 2
+    assert '_stock_detail_new_tab_url(raw_code)' in unified_block
+    assert '_open_stock_detail(' not in unified_block
+    assert '元の候補一覧はそのまま残ります' in text
+    assert 'st.context.url' in text
+    assert 'st.query_params.get("code", "")' in text
 
 def test_history_button_lists_keep_paging_compact_for_performance():
     text = Path("dashboard.py").read_text(encoding="utf-8")
