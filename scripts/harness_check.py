@@ -394,6 +394,10 @@ def check_blueprint(root: Path) -> CheckResult:
         "external_event_review_required_before_order_preview",
         "saved_user_profiles_must_not_be_copied_into_generated_apps",
         "history_stock_detail_must_open_new_tab_without_mutating_history_session",
+        "screen_navigation_must_not_refresh_rule_learning",
+        "large_curated_bundle_must_not_be_copied_per_rerun",
+        "quantitative_features_must_be_prepared_once_per_data_refresh",
+        "rule_learning_must_not_rescan_all_prices_per_security",
     }
     invariants = set(blueprint.get("non_negotiable_invariants", []))
     required_files = blueprint.get("required_files", [])
@@ -498,6 +502,44 @@ def check_candidate_stock_new_tab_navigation(root: Path) -> CheckResult:
             "link_counts": link_counts,
         }, ensure_ascii=False),
     )
+
+def check_large_data_navigation_performance(root: Path) -> CheckResult:
+    dashboard = (root / "dashboard.py").read_text(encoding="utf-8")
+    config = (root / "src/value_dislocation/config.py").read_text(encoding="utf-8")
+    pipeline = (root / "src/value_dislocation/real_pipeline.py").read_text(encoding="utf-8")
+    learning = (root / "src/value_dislocation/strategy/rule_learning.py").read_text(encoding="utf-8")
+
+    bundle_resource_cache = "@st.cache_resource(show_spinner=False, max_entries=2)" in dashboard
+    normal_config_is_light = (
+        "refresh_rule_learning: bool = False" in config
+        and "if refresh_rule_learning:" in config
+        and "apply_active_rule_overrides(data, project_root_from_config(config_path))" in config
+    )
+    refresh_is_explicit = "load_config(config_path, refresh_rule_learning=True)" in pipeline
+    one_feature_prepare = (
+        pipeline.count("prepare_quantitative_universe(") == 1
+        and "prepared=prepared" in pipeline
+        and "apply_quantitative_criteria(prepared, cfg)" in pipeline
+        and "build_quantitative_table(" not in pipeline
+    )
+    indexed_price_lookup = (
+        'prices.groupby("code", sort=False)' in learning
+        and "price_groups.get(str(code))" in learning
+        and 'prices.loc[prices["code"].astype(str) == str(code)' not in learning
+    )
+    passed = all((bundle_resource_cache, normal_config_is_light, refresh_is_explicit, one_feature_prepare, indexed_price_lookup))
+    return CheckResult(
+        "large_data_navigation_performance",
+        passed,
+        json.dumps({
+            "bundle_resource_cache": bundle_resource_cache,
+            "normal_config_is_light": normal_config_is_light,
+            "refresh_is_explicit": refresh_is_explicit,
+            "one_feature_prepare": one_feature_prepare,
+            "indexed_price_lookup": indexed_price_lookup,
+        }, ensure_ascii=False),
+    )
+
 
 def check_dividend_screening(root: Path) -> CheckResult:
     jquants = (root / "src/value_dislocation/data/jquants.py").read_text(encoding="utf-8")
@@ -694,6 +736,7 @@ def run_checks(root: Path, include_pytest: bool = True) -> list[CheckResult]:
         check_instant_preset_and_candidate_navigation(root),
         check_history_stock_new_tab_navigation(root),
         check_candidate_stock_new_tab_navigation(root),
+        check_large_data_navigation_performance(root),
         check_dividend_screening(root),
         check_sbi_csv_bridge(root),
         check_translated_news_and_analyst_help(root),
