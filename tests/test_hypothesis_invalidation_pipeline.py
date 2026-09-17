@@ -1,13 +1,14 @@
 from pathlib import Path
 
 
-def test_real_pipeline_recalculates_invalidation_from_fresh_feature_snapshot():
+def test_real_pipeline_recalculates_invalidation_from_fresh_prepared_features():
     source = Path("src/value_dislocation/real_pipeline.py").read_text(encoding="utf-8")
     assert "build_feature_snapshot" in source
-    assert "load_feature_snapshot" in source
+    assert "prepared=prepared" in source
     assert "evaluate_saved_reviews" in source
     assert "hypothesis_invalidation_latest.csv" in source
-    assert source.index("build_feature_snapshot") < source.rindex("evaluate_saved_reviews")
+    assert "load_feature_snapshot" not in source
+    assert source.index("prepare_quantitative_universe") < source.rindex("evaluate_saved_reviews")
 
 
 def test_dashboard_shows_hypothesis_warning_and_structured_editor():
