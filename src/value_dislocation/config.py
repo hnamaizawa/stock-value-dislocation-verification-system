@@ -10,7 +10,11 @@ class ConfigError(RuntimeError):
     pass
 
 
-def load_config(path: str | Path) -> dict[str, Any]:
+def load_config(
+    path: str | Path,
+    *,
+    refresh_rule_learning: bool = False,
+) -> dict[str, Any]:
     config_path = Path(path)
     if not config_path.exists():
         raise ConfigError(f"設定ファイルが見つかりません: {config_path}")
@@ -21,12 +25,19 @@ def load_config(path: str | Path) -> dict[str, Any]:
     if missing:
         raise ConfigError(f"設定ファイルに不足があります: {sorted(missing)}")
 
-    # Learned rules are a runtime overlay only. The source YAML remains the stable
-    # baseline, so every automatic change is inspectable and reversible.
+    # Normal UI/config reads only overlay the already-learned rules. Scanning all
+    # point-in-time history and recomputing forward returns is intentionally reserved
+    # for an explicit market-data refresh so Streamlit navigation remains cheap.
     if bool(data.get("rule_learning", {}).get("enabled", False)):
-        from value_dislocation.strategy.rule_learning import refresh_and_apply_rule_learning
+        from value_dislocation.strategy.rule_learning import (
+            apply_active_rule_overrides,
+            refresh_and_apply_rule_learning,
+        )
 
-        data = refresh_and_apply_rule_learning(config_path, data)
+        if refresh_rule_learning:
+            data = refresh_and_apply_rule_learning(config_path, data)
+        else:
+            data = apply_active_rule_overrides(data, project_root_from_config(config_path))
     return data
 
 
