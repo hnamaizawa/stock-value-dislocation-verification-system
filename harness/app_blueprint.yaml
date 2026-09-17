@@ -1,6 +1,6 @@
 schema_version: '1.0'
 blueprint_name: japanese-equity-value-dislocation-research
-blueprint_version: 0.6.57
+blueprint_version: 0.6.58
 canonical_project: stock-value-dislocation-verification-system
 purpose: Generate a local-first Japanese equity research application that retrieves
   actual market and financial data, searches listed companies, creates a quantitative
@@ -45,6 +45,10 @@ required_capabilities:
 - automatic_quantitative_rule_improvement
 - history_stock_detail_new_tab_navigation
 - candidate_stock_detail_new_tab_navigation
+- shared_large_curated_bundle_cache
+- single_pass_quantitative_feature_preparation
+- explicit_data_refresh_rule_learning
+- indexed_rule_learning_forward_return_lookup
 non_negotiable_invariants:
 - sbi_order_transmission_disabled
 - sbi_browser_automation_disabled
@@ -76,6 +80,10 @@ non_negotiable_invariants:
 - source_yaml_must_not_be_rewritten_by_rule_learning
 - history_stock_detail_must_open_new_tab_without_mutating_history_session
 - candidate_stock_detail_must_open_new_tab_without_mutating_candidate_session
+- screen_navigation_must_not_refresh_rule_learning
+- large_curated_bundle_must_not_be_copied_per_rerun
+- quantitative_features_must_be_prepared_once_per_data_refresh
+- rule_learning_must_not_rescan_all_prices_per_security
 required_files:
 - AGENTS.md
 - HARNESS.md
@@ -104,6 +112,7 @@ required_files:
 - src/value_dislocation/decision/trend.py
 - src/value_dislocation/decision/buy_readiness.py
 - docs/17_BEGINNER_CONDITION_UI.md
+- docs/19_PERFORMANCE_OPTIMIZATION.md
 runtime_state_exclusions:
 - .env
 - .venv
