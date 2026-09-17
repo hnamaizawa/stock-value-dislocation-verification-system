@@ -160,6 +160,19 @@ def test_load_config_applies_runtime_overlay_without_rewriting_yaml(tmp_path: Pa
         "minimum_drawdown_52w": -0.24
     }
     assert config_path.read_text(encoding="utf-8") == original
+    # Normal UI/config reads must not scan history or create learning state.
+    assert not learning_state_path(tmp_path).exists()
+
+
+def test_explicit_config_refresh_runs_rule_learning(tmp_path: Path):
+    _write_synthetic_history(tmp_path, count=10)
+    config = _base_config(auto_apply=True)
+    config_path = tmp_path / "config" / "real_data.yaml"
+    config_path.parent.mkdir(parents=True)
+    config_path.write_text(yaml.safe_dump(config, allow_unicode=True), encoding="utf-8")
+
+    load_config(config_path, refresh_rule_learning=True)
+
     assert learning_state_path(tmp_path).exists()
 
 
