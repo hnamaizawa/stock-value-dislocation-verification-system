@@ -1,0 +1,34 @@
+name: Apply v0.6.58 harness patch
+
+on:
+  push:
+    branches:
+      - feature/v0.6.58-performance-optimization
+    paths:
+      - scripts/apply_v0658_harness_patch.py
+      - .github/workflows/apply-v0658-harness-patch.yml
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: ${{ !contains(github.event.head_commit.message, 'Apply v0.6.58 harness performance patch') }}
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/v0.6.58-performance-optimization
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Apply harness patch
+        run: python scripts/apply_v0658_harness_patch.py
+      - name: Commit harness and remove one-shot files
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add scripts/harness_check.py
+          git rm scripts/apply_v0658_harness_patch.py .github/workflows/apply-v0658-harness-patch.yml
+          git commit -m "Apply v0.6.58 harness performance patch"
+          git push origin HEAD:feature/v0.6.58-performance-optimization
