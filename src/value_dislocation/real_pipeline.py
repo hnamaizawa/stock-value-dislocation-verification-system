@@ -9,8 +9,13 @@ from .config import load_config, project_root_from_config
 from .data.jquants import date_window, fetch_and_curate_jquants, fetch_policy_from_config
 from .data.search import load_curated_latest
 from .data.snapshot import now_jst, read_manifest, write_dataframe
-from .data.performance import build_feature_snapshot, load_feature_snapshot
-from .strategy.criteria import build_quantitative_table, screening_funnel, shortlist_from_table
+from .data.performance import build_feature_snapshot
+from .strategy.criteria import (
+    apply_quantitative_criteria,
+    prepare_quantitative_universe,
+    screening_funnel,
+    shortlist_from_table,
+)
 from .strategy.quantitative import make_external_event_review_queue
 from .hypothesis_invalidation import evaluate_saved_reviews
 from .history import write_daily_analysis_snapshot, write_star_outcomes
@@ -22,6 +27,8 @@ def run_real_pipeline(
     end: str | None = None,
     client=None,
 ) -> dict[str, Path | str | int | bool]:
+    # Ordinary configuration reads are intentionally cheap. Learned-rule history is
+    # refreshed exactly once below, after the market-data snapshot has been updated.
     cfg = load_config(config_path)
     root = project_root_from_config(config_path)
     runtime = cfg.get("runtime", {})
@@ -42,16 +49,30 @@ def run_real_pipeline(
         client=client,
         fetch_policy=fetch_policy_from_config(provider),
     )
+
+    # Rule learning may scan point-in-time history and attach forward returns. Keep
+    # that CPU-heavy work out of Streamlit navigation and run it only for this explicit
+    # data-refresh path, using the freshly persisted local price snapshot.
+    cfg = load_config(config_path, refresh_rule_learning=True)
+
     data = load_curated_latest(root)
     prices = data["prices"]
     as_of = pd.Timestamp(prices["date"].max())
+
+    # Price/financial feature aggregation is the other expensive CPU step. Compute it
+    # once, persist exactly that frame, then apply the current thresholds to it.
+    prepared = prepare_quantitative_universe(
+        data["companies"], data["prices"], data["financials"], as_of
+    )
     feature_meta = build_feature_snapshot(
-        data["companies"], data["prices"], data["financials"], as_of,
+        data["companies"],
+        data["prices"],
+        data["financials"],
+        as_of,
         root / "data" / "curated" / "latest",
+        prepared=prepared,
     )
-    audit = build_quantitative_table(
-        data["companies"], data["prices"], data["financials"], as_of, cfg
-    )
+    audit = apply_quantitative_criteria(prepared, cfg)
     shortlist = shortlist_from_table(audit, cfg)
     funnel = screening_funnel(audit)
 
@@ -130,13 +151,10 @@ def run_real_pipeline(
     review_archive = root / "data" / "reviews" / f"external_event_review_queue_{paths.run_id}.csv"
     write_dataframe(review, review_archive)
 
-    # Recalculate hypothesis invalidation from the freshly built local feature snapshot.
-    # This reads no previous invalidation result and performs no additional J-Quants fetch.
-    current_features = load_feature_snapshot(root / "data" / "curated" / "latest")
-    if current_features is None:
-        current_features = pd.DataFrame()
+    # Reuse the freshly computed feature frame. Re-reading the persisted parquet here
+    # only adds I/O and memory pressure and cannot make the data newer.
     invalidation_results = evaluate_saved_reviews(
-        root / "config" / "external_event_reviews", current_features
+        root / "config" / "external_event_reviews", prepared
     )
     invalidation_path = output_dir / "hypothesis_invalidation_latest.csv"
     write_dataframe(invalidation_results, invalidation_path)
