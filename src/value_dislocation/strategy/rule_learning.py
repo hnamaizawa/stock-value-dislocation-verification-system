@@ -203,13 +203,24 @@ def _attach_forward_returns(analysis: pd.DataFrame, prices: pd.DataFrame) -> pd.
         return pd.DataFrame()
     frame = analysis.copy()
     frame["close"] = pd.to_numeric(frame.get("close"), errors="coerce")
+
+    # Build the price lookup once. The previous implementation filtered the complete
+    # multi-million-row price DataFrame once per security, which becomes effectively
+    # O(securities x price_rows) as history grows and can pin a CPU core for minutes.
+    price_groups: dict[str, tuple[np.ndarray, np.ndarray]] = {}
+    for code, px in prices.groupby("code", sort=False):
+        ordered = px[["date", "close"]].sort_values("date")
+        price_groups[str(code)] = (
+            ordered["date"].to_numpy(dtype="datetime64[ns]"),
+            ordered["close"].to_numpy(dtype=float),
+        )
+
     result_parts: list[pd.DataFrame] = []
     for code, rows in frame.groupby("code", sort=False):
-        px = prices.loc[prices["code"].astype(str) == str(code), ["date", "close"]]
-        if px.empty:
+        price_arrays = price_groups.get(str(code))
+        if price_arrays is None:
             continue
-        dates = px["date"].to_numpy(dtype="datetime64[ns]")
-        closes = px["close"].to_numpy(dtype=float)
+        dates, closes = price_arrays
         g = rows.sort_values("analysis_date").copy()
         entry = pd.to_numeric(g["close"], errors="coerce").to_numpy(dtype=float)
         base_dates = g["analysis_date"].to_numpy(dtype="datetime64[ns]")

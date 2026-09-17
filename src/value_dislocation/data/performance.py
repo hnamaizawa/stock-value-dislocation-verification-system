@@ -20,10 +20,20 @@ def build_feature_snapshot(
     financials: pd.DataFrame,
     as_of: pd.Timestamp,
     output_dir: Path,
+    *,
+    prepared: pd.DataFrame | None = None,
 ) -> dict[str, Any]:
-    """Precompute one row per security for fast interactive screening."""
+    """Persist one row per security for fast interactive screening.
+
+    A pipeline that already computed ``prepared`` can pass it here so the expensive
+    price/financial aggregation is not repeated merely to write the snapshot.
+    """
     output_dir.mkdir(parents=True, exist_ok=True)
-    features = prepare_quantitative_universe(companies, prices, financials, as_of)
+    features = (
+        prepared
+        if prepared is not None
+        else prepare_quantitative_universe(companies, prices, financials, as_of)
+    )
     parquet_path = output_dir / FEATURE_FILE
     csv_path = output_dir / FEATURE_CSV
     features.to_parquet(parquet_path, index=False, compression="zstd")

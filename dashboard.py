@@ -580,8 +580,11 @@ def _render_trend_price_chart(
     st.caption("太線が株価、20日線＝短期、50日線＝中期、200日線＝長期の目安です。価格帯やラインは参考表示で、注文指示ではありません。")
 
 
-@st.cache_data(show_spinner=False)
+@st.cache_resource(show_spinner=False, max_entries=2)
 def _load_bundle(manifest_mtime_ns: int) -> dict:
+    # The curated market bundle can contain millions of price rows. cache_resource
+    # shares the same read-only object across Streamlit reruns/sessions instead of
+    # serializing and copying the full DataFrames on every page navigation.
     del manifest_mtime_ns
     data = load_curated_latest(ROOT)
     as_of = pd.Timestamp(data["prices"]["date"].max())
