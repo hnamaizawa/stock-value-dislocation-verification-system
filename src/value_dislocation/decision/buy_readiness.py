@@ -142,11 +142,17 @@ def build_buy_readiness(
 
 
 
+REVERSAL_STAR_RULE_VERSION = "reversal_v1"
+
+
 def build_intuitive_signal(readiness: dict[str, Any], trend_transition: dict[str, Any] | None = None) -> dict[str, Any]:
     """Map the explainable decision result to a beginner-friendly badge.
 
-    A star is intentionally strict: it means no major weakness was found in the
-    core financial/trend checks currently available. It is not a guarantee.
+    ``legacy_star`` reproduces the pre-v0.6.61 ◎☆ qualification so outcome history
+    can compare the old rule with the new rule.  The displayed ◎☆ is deliberately
+    stricter: the old quality gate must pass *and* a short-term reversal must be
+    confirmed by price/MA/momentum evidence.  It is still not a guarantee or order
+    recommendation.
     """
     trend_transition = trend_transition or {}
     level = str(readiness.get("decision_level", "stop"))
@@ -158,17 +164,76 @@ def build_intuitive_signal(readiness: dict[str, Any], trend_transition: dict[str
     core_checks = [item for item in checks if item.get("key") in core_keys]
     core_clear = bool(core_checks) and all(item.get("status") == "pass" for item in core_checks)
     has_failure = any(item.get("status") == "fail" for item in checks)
-    star = bool(level == "consider" and score >= 85 and current_score >= 2 and core_clear and not has_failure)
+
+    legacy_star = bool(level == "consider" and score >= 85 and current_score >= 2 and core_clear and not has_failure)
+
+    current = trend_transition.get("current", {}) or {}
+    latest_price = _number(current.get("latest_price"))
+    sma20 = _number(current.get("sma20"))
+    sma50 = _number(current.get("sma50"))
+    return_20d = _number(current.get("return_20d"))
+    reversal_checks = {
+        "trend_score_at_least_5": current_score >= 5,
+        "return_20d_nonnegative": return_20d is not None and return_20d >= 0,
+        "price_above_sma20": latest_price is not None and sma20 is not None and latest_price > sma20,
+        "sma20_rising": bool(current.get("sma20_rising")),
+        "sma20_above_sma50": sma20 is not None and sma50 is not None and sma20 > sma50,
+    }
+    reversal_star = bool(legacy_star and all(reversal_checks.values()))
+
+    metadata = {
+        "star": reversal_star,
+        "legacy_star": legacy_star,
+        "reversal_star": reversal_star,
+        "star_rule_version": REVERSAL_STAR_RULE_VERSION,
+        "reversal_checks": reversal_checks,
+    }
 
     if level == "consider" and score >= 75 and (escaped or current_score >= 2):
-        symbol = "◎☆" if star else "◎"
-        detail = "主要な財務・業績・トレンド項目に明確な欠点が見当たらず、最新トレンドも良好です。" if star else "定量条件が比較的揃い、最新トレンドにも改善・上向きの兆候があります。"
-        return {"symbol": symbol, "label": "買い候補", "detail": detail, "star": star}
+        if reversal_star:
+            return {
+                "symbol": "◎☆",
+                "label": "反転確認済み候補",
+                "detail": (
+                    "主要な財務・業績項目に明確な欠点がなく、反転確認条件（トレンドスコア5以上、"
+                    "20日騰落率0%以上、株価>MA20、MA20上向き、MA20>MA50）も満たしています。"
+                ),
+                **metadata,
+            }
+        if legacy_star:
+            missing = [key for key, ok in reversal_checks.items() if not ok]
+            return {
+                "symbol": "◎",
+                "label": "買い候補（反転確認待ち）",
+                "detail": "旧◎☆条件相当ですが、反転確認条件が未達です。未達: " + ", ".join(missing),
+                **metadata,
+            }
+        return {
+            "symbol": "◎",
+            "label": "買い候補",
+            "detail": "定量条件が比較的揃い、最新トレンドにも改善・上向きの兆候があります。",
+            **metadata,
+        }
     if level == "consider":
-        return {"symbol": "○", "label": "条件付き候補", "detail": "定量条件は比較的良好ですが、最新トレンドまたは人手確認が不足しています。", "star": False}
+        return {
+            "symbol": "○",
+            "label": "条件付き候補",
+            "detail": "定量条件は比較的良好ですが、最新トレンドまたは人手確認が不足しています。",
+            **metadata,
+        }
     if level == "research":
-        return {"symbol": "△", "label": "様子見", "detail": "有利材料と注意材料が混在しています。追加確認または値動きの改善を待ちます。", "star": False}
-    return {"symbol": "×", "label": "見送り", "detail": "重要な弱点または明確な下降トレンドがあり、現時点では買いを急がない状態です。", "star": False}
+        return {
+            "symbol": "△",
+            "label": "様子見",
+            "detail": "有利材料と注意材料が混在しています。追加確認または値動きの改善を待ちます。",
+            **metadata,
+        }
+    return {
+        "symbol": "×",
+        "label": "見送り",
+        "detail": "重要な弱点または明確な下降トレンドがあり、現時点では買いを急がない状態です。",
+        **metadata,
+    }
 
 
 def build_entry_price_guidance(

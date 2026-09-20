@@ -120,11 +120,24 @@ def test_intuitive_signal_adds_star_only_when_core_checks_are_clear():
         for key in ("sales", "margin", "equity", "ocf", "forecast", "payout", "div_change", "trend")
     ]
     readiness = {"decision_level": "consider", "evidence_score": 92, "checks": checks}
-    signal = build_intuitive_signal(readiness, {"current_score": 5, "escaped_downtrend": True})
+    transition = {
+        "current_score": 5,
+        "escaped_downtrend": True,
+        "current": {
+            "latest_price": 110.0,
+            "sma20": 105.0,
+            "sma50": 100.0,
+            "sma20_rising": True,
+            "return_20d": 0.04,
+        },
+    }
+    signal = build_intuitive_signal(readiness, transition)
     assert signal["star"] is True
+    assert signal["legacy_star"] is True
+    assert signal["reversal_star"] is True
     assert signal["symbol"] == "◎☆"
 
     readiness["checks"] = checks + [{"key": "equity", "status": "fail"}]
-    signal = build_intuitive_signal(readiness, {"current_score": 5, "escaped_downtrend": True})
+    signal = build_intuitive_signal(readiness, transition)
     assert signal["star"] is False
     assert signal["symbol"] == "◎"

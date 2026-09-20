@@ -471,13 +471,21 @@ def revaluate_unassessed_rows(
             "decision_note": "後日補完。評価対象日より後の株価は使用していません。 " + str(transition.get("summary", "")),
             "evaluation_status": EVALUATION_STATUS_BACKFILLED,
             "unassessed_reason": "",
+            "legacy_star_eligible": bool(intuitive.get("legacy_star", intuitive.get("symbol") == "◎☆")),
+            "reversal_star_eligible": bool(intuitive.get("reversal_star", intuitive.get("symbol") == "◎☆")),
+            "star_rule_version": str(intuitive.get("star_rule_version", "reversal_v1")),
         })
         rows.append(result)
     return pd.DataFrame(rows)
 
 
 def upsert_daily_evaluations(project_root: Path, rows: pd.DataFrame, *, evaluation_date: date | str, analysis_as_of: date | str | None = None) -> Path:
-    """Upsert the current unified-candidate evaluation once per date/code/strategy."""
+    """Upsert the current unified-candidate evaluation once per date/code/strategy.
+
+    Since v0.6.61 the displayed ◎☆ is reversal-confirmed.  Persist both the old
+    star qualification and the new qualification so future validation can compare
+    them without rewriting historical rows.
+    """
     folder = history_root(project_root) / "evaluations"
     folder.mkdir(parents=True, exist_ok=True)
     path = folder / "evaluations.csv.gz"
@@ -495,6 +503,21 @@ def upsert_daily_evaluations(project_root: Path, rows: pd.DataFrame, *, evaluati
         incoming["intuitive_symbol"] = incoming["直感判定"].astype(str).str.split().str[0]
     elif "intuitive_symbol" not in incoming.columns:
         incoming["intuitive_symbol"] = ""
+
+    # dashboard.py already stores the human-readable detail.  The marker is used
+    # only to preserve whether the pre-v0.6.61 rule would have produced ◎☆.
+    note_source = incoming.get("判断メモ", incoming.get("decision_note", pd.Series("", index=incoming.index)))
+    if not isinstance(note_source, pd.Series):
+        note_source = pd.Series(str(note_source), index=incoming.index)
+    note_source = note_source.fillna("").astype(str)
+    symbols = incoming["intuitive_symbol"].fillna("").astype(str)
+    if "legacy_star_eligible" not in incoming.columns:
+        incoming["legacy_star_eligible"] = symbols.eq("◎☆") | note_source.str.contains("旧◎☆条件相当", regex=False)
+    if "reversal_star_eligible" not in incoming.columns:
+        incoming["reversal_star_eligible"] = symbols.eq("◎☆")
+    if "star_rule_version" not in incoming.columns:
+        incoming["star_rule_version"] = "reversal_v1"
+
     rename = {
         "企業名": "name", "市場": "market", "最新株価": "latest_price", "最新判定": "latest_trend",
         "変化": "trend_transition", "仮説警告": "invalidation_status", "定量スコア": "strategy_score",
@@ -505,7 +528,8 @@ def upsert_daily_evaluations(project_root: Path, rows: pd.DataFrame, *, evaluati
         "evaluation_date", "analysis_as_of", "code", "name", "market", "selection_strategy",
         "intuitive_symbol", "strategy_score", "latest_price", "latest_market_date", "latest_trend",
         "trend_transition", "invalidation_status", "decision_note", "evaluation_status",
-        "unassessed_reason", "original_final_evaluation", "original_unassessed_reason", "evaluated_at", "evaluation_as_of"
+        "unassessed_reason", "original_final_evaluation", "original_unassessed_reason", "evaluated_at", "evaluation_as_of",
+        "legacy_star_eligible", "reversal_star_eligible", "star_rule_version",
     ] if c in incoming.columns]
     incoming = incoming[keep].copy()
     if path.exists():
@@ -538,11 +562,44 @@ def load_evaluation_history(project_root: Path) -> pd.DataFrame:
     return frame
 
 
-def build_star_events(evaluations: pd.DataFrame, horizons: Iterable[int] = STAR_OUTCOME_HORIZONS) -> pd.DataFrame:
-    """Build one event per observed transition into ◎☆ and compute saved-price forward returns.
+def _stored_bool(value) -> bool | None:
+    if value is None or (isinstance(value, float) and pd.isna(value)):
+        return None
+    if isinstance(value, bool):
+        return value
+    text = str(value).strip().lower()
+    if text in {"true", "1", "yes", "y", "on"}:
+        return True
+    if text in {"false", "0", "no", "n", "off", "", "nan", "none", "<na>"}:
+        return False
+    return bool(value)
 
-    Rows whose Yahoo evaluation was skipped/failed do not end an existing star episode.
-    Calendar horizons are measured from the actual latest_market_date when available.
+
+def _is_star_row(row: pd.Series, star_mode: str) -> bool:
+    displayed = str(row.get("intuitive_symbol", "")) == "◎☆"
+    if star_mode == "displayed":
+        return displayed
+    if star_mode == "legacy":
+        stored = _stored_bool(row.get("legacy_star_eligible"))
+        return displayed if stored is None else stored
+    if star_mode == "reversal":
+        stored = _stored_bool(row.get("reversal_star_eligible"))
+        return False if stored is None else stored
+    raise ValueError(f"unknown star_mode: {star_mode}")
+
+
+def build_star_events(
+    evaluations: pd.DataFrame,
+    horizons: Iterable[int] = STAR_OUTCOME_HORIZONS,
+    *,
+    star_mode: str = "displayed",
+) -> pd.DataFrame:
+    """Build one event per transition into the selected star rule.
+
+    ``displayed`` preserves the historically displayed ◎☆ series. ``legacy``
+    reproduces the pre-v0.6.61 quality-star qualification where recorded, while
+    ``reversal`` uses the new reversal-confirmed qualification.  Old rows without
+    explicit rule metadata are never guessed as reversal-confirmed.
     """
     if evaluations.empty or "intuitive_symbol" not in evaluations.columns:
         return pd.DataFrame()
@@ -560,11 +617,12 @@ def build_star_events(evaluations: pd.DataFrame, horizons: Iterable[int] = STAR_
             valid_observation = pd.notna(row.get("latest_price")) and not str(row.get("latest_trend", "")).startswith(("未実施", "取得不能"))
             if not valid_observation:
                 continue
-            is_star = str(row.get("intuitive_symbol", "")) == "◎☆"
+            is_star = _is_star_row(row, star_mode)
             if is_star and not prev_star:
                 event = row.to_dict()
                 event["star_date"] = pd.Timestamp(row["observation_date"]).date().isoformat()
                 event["entry_price"] = float(row["latest_price"])
+                event["star_mode"] = star_mode
                 for horizon in horizons:
                     target = pd.Timestamp(row["observation_date"]) + pd.to_timedelta(int(horizon), unit="D")
                     future = g.loc[(g["observation_date"] >= target) & pd.to_numeric(g["latest_price"], errors="coerce").notna()]
@@ -580,21 +638,54 @@ def build_star_events(evaluations: pd.DataFrame, horizons: Iterable[int] = STAR_
     return pd.DataFrame(events)
 
 
+def star_rule_comparison_summary(evaluations: pd.DataFrame) -> pd.DataFrame:
+    """Compare old/new star rules over the period where v0.6.61 metadata exists.
 
-
-def reconcile_star_outcomes(evaluations: pd.DataFrame, saved_events: pd.DataFrame | None = None) -> pd.DataFrame:
-    """Rebuild the complete ◎☆ event set from evaluation history while preserving saved outcomes.
-
-    Evaluation history is the source of truth for which star events exist.  Saved
-    10/20/30/60/90/180-day returns are carried forward by (code, star_date), so adding an
-    older/missing event never discards already-enriched forward-return data.
+    This is intentionally prospective and point-in-time safe: pre-v0.6.61 rows are
+    not reverse-engineered into the new rule because their exact reversal gate state
+    was not persisted.  Returns are based on saved evaluation observations and make
+    no external data request.
     """
-    rebuilt = build_star_events(evaluations)
+    if evaluations is None or evaluations.empty or "star_rule_version" not in evaluations.columns:
+        return pd.DataFrame()
+    covered = evaluations.loc[
+        evaluations["star_rule_version"].fillna("").astype(str).eq("reversal_v1")
+        & evaluations.get("selection_strategy", pd.Series("value_dislocation", index=evaluations.index)).fillna("").astype(str).eq("value_dislocation")
+    ].copy()
+    if covered.empty:
+        return pd.DataFrame()
+    rows = []
+    for mode, label in (("legacy", "旧◎☆条件"), ("reversal", "反転確認◎☆")):
+        events = build_star_events(covered, star_mode=mode)
+        row = {"判定方式": label, "開始イベント数": int(len(events))}
+        for horizon in STAR_OUTCOME_HORIZONS:
+            values = _numeric_column(events, f"return_{horizon}d").dropna()
+            row[f"{horizon}日平均"] = float(values.mean()) if len(values) else None
+            row[f"{horizon}日プラス率"] = float((values > 0).mean()) if len(values) else None
+            row[f"{horizon}日確定件数"] = int(len(values))
+        rows.append(row)
+    result = pd.DataFrame(rows)
+    result.attrs["coverage_start"] = str(pd.to_datetime(covered["evaluation_date"], errors="coerce").min().date()) if pd.to_datetime(covered["evaluation_date"], errors="coerce").notna().any() else ""
+    return result
+
+
+def reconcile_star_outcomes(
+    evaluations: pd.DataFrame,
+    saved_events: pd.DataFrame | None = None,
+    *,
+    star_mode: str = "displayed",
+) -> pd.DataFrame:
+    """Rebuild the complete star event set while preserving saved forward returns."""
+    comparison = star_rule_comparison_summary(evaluations)
+    rebuilt = build_star_events(evaluations, star_mode=star_mode)
     if rebuilt.empty:
+        rebuilt.attrs["star_rule_comparison"] = comparison
         return rebuilt
     saved = pd.DataFrame() if saved_events is None else saved_events.copy()
     if saved.empty or not {"code", "star_date"}.issubset(saved.columns):
-        return rebuilt.sort_values(["star_date", "code"], ascending=[True, True]).reset_index(drop=True)
+        result = rebuilt.sort_values(["star_date", "code"], ascending=[True, True]).reset_index(drop=True)
+        result.attrs["star_rule_comparison"] = comparison
+        return result
 
     rebuilt = rebuilt.copy()
     saved = saved.copy()
@@ -617,7 +708,10 @@ def reconcile_star_outcomes(evaluations: pd.DataFrame, saved_events: pd.DataFram
             value = prior.get(col)
             if pd.notna(value):
                 rebuilt.at[idx, col] = value
-    return rebuilt.sort_values(["star_date", "code"], ascending=[True, True]).reset_index(drop=True)
+    result = rebuilt.sort_values(["star_date", "code"], ascending=[True, True]).reset_index(drop=True)
+    result.attrs["star_rule_comparison"] = comparison
+    return result
+
 
 def enrich_star_events_with_market_histories(star_events: pd.DataFrame, histories: dict[str, pd.DataFrame], horizons: Iterable[int] = STAR_OUTCOME_HORIZONS) -> pd.DataFrame:
     """Fill forward returns from externally supplied daily histories without fetching data here."""
@@ -800,6 +894,27 @@ def star_validation_text_summary(
             positive_periods = int((matured["平均リターン(%)"] > 0).sum())
             lines.append(f"平均リターンがプラスの期間は、確定済み {len(matured):,} 期間中 {positive_periods:,} 期間です。")
 
+    comparison = events.attrs.get("star_rule_comparison") if hasattr(events, "attrs") else None
+    if isinstance(comparison, pd.DataFrame) and not comparison.empty and "判定方式" in comparison.columns:
+        legacy = comparison.loc[comparison["判定方式"] == "旧◎☆条件"]
+        reversal = comparison.loc[comparison["判定方式"] == "反転確認◎☆"]
+        if not legacy.empty and not reversal.empty:
+            l = legacy.iloc[0]
+            r = reversal.iloc[0]
+            coverage_start = comparison.attrs.get("coverage_start", "v0.6.61導入後")
+            lines.append(
+                f"新旧ルール比較（{coverage_start}以降・保存評価ベース）: 旧◎☆条件 {int(l['開始イベント数']):,} 件、反転確認◎☆ {int(r['開始イベント数']):,} 件です。"
+            )
+            if int(l.get("20日確定件数", 0) or 0) and int(r.get("20日確定件数", 0) or 0):
+                lines.append(
+                    "20日実績は旧条件 "
+                    f"平均 {float(l['20日平均']) * 100:+.1f}% / プラス率 {float(l['20日プラス率']) * 100:.1f}%、"
+                    "反転確認条件 "
+                    f"平均 {float(r['20日平均']) * 100:+.1f}% / プラス率 {float(r['20日プラス率']) * 100:.1f}%です。"
+                )
+            else:
+                lines.append("新旧ルールの20日比較は、反転確認◎☆の実績が確定するまで蓄積中です。")
+
     perf = pd.DataFrame() if condition_perf is None else condition_perf.copy()
     avg_col = f"{condition_horizon}日平均"
     count_col = f"{condition_horizon}日確定件数"
@@ -810,7 +925,7 @@ def star_validation_text_summary(
         if not usable.empty:
             best_condition = usable.sort_values(avg_col, ascending=False).iloc[0]
             lines.append(f"条件別では「{best_condition['条件']}」の{condition_horizon}日平均が最も高く {float(best_condition[avg_col]) * 100:+.1f}%（{int(best_condition[count_col]):,}件）です。因果関係ではなく参考傾向です。")
-    return lines[:4]
+    return lines[:7]
 
 
 EVALUATION_SYMBOL_ORDER = ["◎☆", "◎", "○", "△", "×", "未評価", "対象外"]
