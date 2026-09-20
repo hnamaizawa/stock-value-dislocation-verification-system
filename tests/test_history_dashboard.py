@@ -78,7 +78,7 @@ def test_history_dashboard_uses_lazy_sections_cache_and_pagination():
     assert "_cached_load_star_outcomes(" in text
     assert "_cached_condition_performance(" in text
     assert "_history_page_slice(" in text
-    assert 'button("Yahooで30/90/180日実績を更新"' in text
+    assert 'button("Yahooで10/20/30/60/90/180日実績を更新"' in text
     assert "画面を開いただけではYahooへアクセスしません" in text
 
 

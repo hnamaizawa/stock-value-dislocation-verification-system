@@ -40,6 +40,7 @@ from value_dislocation.external_event_review import (
 )
 from value_dislocation.ui_preferences import load_ui_preferences, save_ui_preferences
 from value_dislocation.history import (
+    STAR_OUTCOME_HORIZONS,
     attach_daily_final_evaluations,
     select_slow_revaluation_batch,
     build_star_events,
@@ -703,8 +704,8 @@ def _render_history_stock_buttons(
     preferred = {
         "daily_history": ["analysis_date", "final_evaluation", "evaluation_status", "strategy_score", "close"],
         "evaluation_history": ["evaluation_date", "intuitive_symbol", "evaluation_status", "selection_strategy", "latest_close"],
-        "star_summary": ["first_star_date", "latest_star_date", "star_count", "latest_entry_price", "return_30d_avg"],
-        "star_events_detail": ["star_date", "entry_price", "return_30d", "return_90d", "return_180d"],
+        "star_summary": ["first_star_date", "latest_star_date", "star_count", "latest_entry_price", "return_10d_avg"],
+        "star_events_detail": ["star_date", "entry_price", "return_10d", "return_20d", "return_30d"],
     }
     meta_cols = [c for c in preferred.get(key, []) if c in display_frame.columns][:5]
     header = st.columns([1.1, 2.5] + [1.15] * len(meta_cols))
@@ -1836,12 +1837,12 @@ def _render_history_star_validation(evaluation: pd.DataFrame) -> None:
 
     star_codes = sorted(set(star_events.get("code", pd.Series(dtype=str)).dropna().astype(str)))
     refresh_col, info_col = st.columns([2, 5])
-    refresh_clicked = refresh_col.button("Yahooで30/90/180日実績を更新", key="history_refresh_star_outcomes", type="primary")
+    refresh_clicked = refresh_col.button("Yahooで10/20/30/60/90/180日実績を更新", key="history_refresh_star_outcomes", type="primary")
     info_col.caption("画面を開いただけではYahooへアクセスしません。必要なときだけ明示的に更新するため、履歴画面の初期表示を高速化しています。")
     if refresh_clicked:
         if star_codes and yahoo_bulk_fetch_allowed(len(star_codes)):
             histories = {}
-            with st.spinner(f"◎☆実績の30/90/180日リターンを最新Yahoo日足で更新しています（{len(star_codes)}銘柄）…"):
+            with st.spinner(f"◎☆実績の10/20/30/60/90/180日リターンを最新Yahoo日足で更新しています（{len(star_codes)}銘柄）…"):
                 for code in star_codes:
                     try:
                         histories[code] = _history_validation_market_history(code)
@@ -1858,35 +1859,39 @@ def _render_history_star_validation(evaluation: pd.DataFrame) -> None:
                 f"{YAHOO_BULK_FETCH_BLOCK_THRESHOLD}銘柄以上では外部取得を実施しません。"
             )
 
-    completed30 = pd.to_numeric(star_events.get("return_30d"), errors="coerce").dropna()
-    completed90 = pd.to_numeric(star_events.get("return_90d"), errors="coerce").dropna()
-    completed180 = pd.to_numeric(star_events.get("return_180d"), errors="coerce").dropna()
+    completed_by_horizon = {
+        horizon: pd.to_numeric(star_events.get(f"return_{horizon}d"), errors="coerce").dropna()
+        for horizon in STAR_OUTCOME_HORIZONS
+    }
     unique_star_codes = star_events.get("code", pd.Series(dtype=str)).dropna().astype(str).nunique()
-    m = st.columns(4)
-    m[0].metric("◎☆開始イベント", f"{len(star_events):,}", f"ユニーク {unique_star_codes:,} 銘柄")
-    m[1].metric("30日確定", f"{len(completed30):,}", f"平均 {completed30.mean()*100:.1f}%" if len(completed30) else "未確定")
-    m[2].metric("90日確定", f"{len(completed90):,}", f"平均 {completed90.mean()*100:.1f}%" if len(completed90) else "未確定")
-    m[3].metric("180日確定", f"{len(completed180):,}", f"平均 {completed180.mean()*100:.1f}%" if len(completed180) else "未確定")
+    first_metrics = st.columns(4)
+    first_metrics[0].metric("◎☆開始イベント", f"{len(star_events):,}", f"ユニーク {unique_star_codes:,} 銘柄")
+    for idx, horizon in enumerate((10, 20, 30), start=1):
+        completed = completed_by_horizon[horizon]
+        first_metrics[idx].metric(f"{horizon}日確定", f"{len(completed):,}", f"平均 {completed.mean()*100:.1f}%" if len(completed) else "未確定")
+    second_metrics = st.columns(3)
+    for idx, horizon in enumerate((60, 90, 180)):
+        completed = completed_by_horizon[horizon]
+        second_metrics[idx].metric(f"{horizon}日確定", f"{len(completed):,}", f"平均 {completed.mean()*100:.1f}%" if len(completed) else "未確定")
 
     forward_chart = star_forward_return_summary(star_events)
     matured_chart = forward_chart.loc[forward_chart["確定件数"] > 0, ["平均リターン(%)"]] if not forward_chart.empty else pd.DataFrame()
     if not matured_chart.empty:
         st.markdown("#### 可視化：◎☆後の平均リターン")
-        st.caption("実績が確定した◎☆開始イベントだけを使った30/90/180日後の平均リターンです。未確定イベントは含みません。")
+        st.caption("実績が確定した◎☆開始イベントだけを使った10/20/30/60/90/180日後の平均リターンです。未確定イベントは含みません。")
         st.bar_chart(matured_chart, width="stretch")
 
     st.markdown("#### ◎☆銘柄サマリ（同一銘柄は1行）")
-    st.caption("同じ銘柄が複数回◎☆になっても銘柄コード単位で1行にまとめます。初回/最新の◎☆日、◎☆回数、最新entry_price、確定済みイベントの平均30/90/180日リターンを表示します。")
+    st.caption("同じ銘柄が複数回◎☆になっても銘柄コード単位で1行にまとめます。初回/最新の◎☆日、◎☆回数、最新entry_price、確定済みイベントの平均10/20/30/60/90/180日リターンを表示します。")
     sort_order = st.segmented_control("並び順", ["最新◎☆日の新しい順", "初回◎☆日の古い順"], default="最新◎☆日の新しい順", key="star_history_sort_order")
     summary = summarize_star_outcomes_by_code(star_events)
-    for h in (30, 90, 180):
+    for h in STAR_OUTCOME_HORIZONS:
         col = f"return_{h}d_avg"
         if col in summary.columns:
             summary[col] = pd.to_numeric(summary[col], errors="coerce") * 100
-    summary_cols = [
-        "code", "name", "first_star_date", "latest_star_date", "star_count", "latest_entry_price",
-        "return_30d_avg", "completed_30d", "return_90d_avg", "completed_90d", "return_180d_avg", "completed_180d",
-    ]
+    summary_cols = ["code", "name", "first_star_date", "latest_star_date", "star_count", "latest_entry_price"]
+    for h in STAR_OUTCOME_HORIZONS:
+        summary_cols.extend([f"return_{h}d_avg", f"completed_{h}d"])
     summary = summary[[c for c in summary_cols if c in summary.columns]]
     if sort_order == "初回◎☆日の古い順":
         summary = summary.sort_values(["first_star_date", "code"], ascending=[True, True])
@@ -1897,10 +1902,12 @@ def _render_history_star_validation(evaluation: pd.DataFrame) -> None:
 
     if st.checkbox("◎☆開始イベントを個別表示する", value=False, key="show_star_event_details"):
         event_show = star_events.copy()
-        for h in (30, 90, 180):
+        for h in STAR_OUTCOME_HORIZONS:
             if f"return_{h}d" in event_show.columns:
                 event_show[f"return_{h}d"] = pd.to_numeric(event_show[f"return_{h}d"], errors="coerce") * 100
-        event_cols = ["star_date", "code", "name", "entry_price", "return_30d", "return_90d", "return_180d", "actual_days_30d", "actual_days_90d", "actual_days_180d"]
+        event_cols = ["star_date", "code", "name", "entry_price"]
+        for h in STAR_OUTCOME_HORIZONS:
+            event_cols.extend([f"return_{h}d", f"actual_days_{h}d"])
         event_show = event_show[[c for c in event_cols if c in event_show.columns]].sort_values(["star_date", "code"], ascending=[False, True])
         _render_history_sortable_stock_table(event_show, "star_events_detail")
         st.caption("個別表示はイベント単位です。同じ銘柄が◎☆から外れた後に再び◎☆になった場合は別イベントとして複数行表示されます。")
@@ -1919,7 +1926,7 @@ def _render_history_star_validation(evaluation: pd.DataFrame) -> None:
         st.dataframe(display, width="stretch", hide_index=True)
         horizon = st.segmented_control(
             "条件別グラフの期間",
-            ["30日", "90日", "180日"],
+            [f"{h}日" for h in STAR_OUTCOME_HORIZONS],
             default="90日",
             key="history_condition_chart_horizon",
         )

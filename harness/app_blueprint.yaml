@@ -1,6 +1,6 @@
 schema_version: '1.0'
 blueprint_name: japanese-equity-value-dislocation-research
-blueprint_version: 0.6.58
+blueprint_version: 0.6.59
 canonical_project: stock-value-dislocation-verification-system
 purpose: Generate a local-first Japanese equity research application that retrieves
   actual market and financial data, searches listed companies, creates a quantitative
