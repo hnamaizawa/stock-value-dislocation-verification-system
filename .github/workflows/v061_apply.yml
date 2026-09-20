@@ -1,0 +1,41 @@
+name: v061 guarded patch
+
+on:
+  push:
+    branches:
+      - feature/v0.6.61-reversal-confirmed-star
+
+permissions:
+  contents: write
+
+jobs:
+  apply-test-commit:
+    if: ${{ !contains(github.event.head_commit.message, '[v061-applied]') }}
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/v0.6.61-reversal-confirmed-star
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+      - name: Apply v0.6.61 patch
+        run: python scripts/apply_v061_patch.py
+      - name: Install project and development dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[dashboard,dev]"
+      - name: Run pytest
+        run: python -m pytest tests/
+      - name: Run harness checks
+        run: python scripts/harness_check.py
+      - name: Commit validated changes
+        run: |
+          rm -f scripts/apply_v061_patch.py .github/workflows/v061_apply.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "v0.6.61 reversal-confirmed star [v061-applied]"
+          git push origin HEAD:feature/v0.6.61-reversal-confirmed-star
