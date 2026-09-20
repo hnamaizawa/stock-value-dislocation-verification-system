@@ -46,6 +46,8 @@ from value_dislocation.history import (
     build_star_events,
     condition_performance,
     daily_evaluation_counts,
+    daily_history_text_summary,
+    evaluation_history_text_summary,
     evaluation_symbol_counts,
     enrich_star_events_with_market_histories,
     load_analysis_history,
@@ -57,6 +59,7 @@ from value_dislocation.history import (
     save_star_outcomes,
     summarize_star_outcomes_by_code,
     star_forward_return_summary,
+    star_validation_text_summary,
     write_star_outcomes,
 )
 from value_dislocation.hypothesis_invalidation import (
@@ -1529,6 +1532,14 @@ def render_condition_builder() -> None:
 
 
 
+def _render_history_analysis_summary(lines: list[str], *, title: str = "分析結果サマリ") -> None:
+    if not lines:
+        return
+    with st.container(border=True):
+        st.markdown(f"#### {title}")
+        st.markdown("\n".join(f"- {line}" for line in lines))
+
+
 def _render_history_daily(evaluation_signature) -> None:
     analysis_dir = ROOT / "data" / "history" / "analysis"
     files = sorted(analysis_dir.glob("????-??-??.csv.gz")) if analysis_dir.exists() else []
@@ -1581,6 +1592,7 @@ def _render_history_daily(evaluation_signature) -> None:
         assessed_mask = hist["evaluation_status"].astype(str).isin(["当日評価済み", "後日補完", "評価対象外"])
         hist = hist.loc[reason_mask | assessed_mask]
 
+    _render_history_analysis_summary(daily_history_text_summary(hist))
     st.metric("該当履歴", f"{len(hist):,} 行")
     if not hist.empty:
         daily_chart = daily_evaluation_counts(hist)
@@ -1803,6 +1815,7 @@ def _render_history_evaluations(evaluation: pd.DataFrame) -> None:
         e = e.loc[e["selection_strategy"].astype(str).isin(selected_strategies)]
     if selected_eval_status and "evaluation_status" in e.columns:
         e = e.loc[e["evaluation_status"].astype(str).isin(selected_eval_status)]
+    _render_history_analysis_summary(evaluation_history_text_summary(e))
     st.metric("該当評価履歴", f"{len(e):,} 行")
     if not e.empty:
         symbol_chart = evaluation_symbol_counts(e)
@@ -1860,7 +1873,7 @@ def _render_history_star_validation(evaluation: pd.DataFrame) -> None:
             )
 
     completed_by_horizon = {
-        horizon: pd.to_numeric(star_events.get(f"return_{horizon}d"), errors="coerce").dropna()
+        horizon: pd.to_numeric(star_events.get(f"return_{horizon}d", pd.Series(index=star_events.index, dtype=float)), errors="coerce").dropna()
         for horizon in STAR_OUTCOME_HORIZONS
     }
     unique_star_codes = star_events.get("code", pd.Series(dtype=str)).dropna().astype(str).nunique()
@@ -1875,6 +1888,9 @@ def _render_history_star_validation(evaluation: pd.DataFrame) -> None:
         second_metrics[idx].metric(f"{horizon}日確定", f"{len(completed):,}", f"平均 {completed.mean()*100:.1f}%" if len(completed) else "未確定")
 
     forward_chart = star_forward_return_summary(star_events)
+    all_analysis_signature = _analysis_history_signature(None, None)
+    perf = _cached_condition_performance(str(ROOT), all_analysis_signature, _star_outcomes_signature())
+    _render_history_analysis_summary(star_validation_text_summary(star_events, forward_chart, perf))
     matured_chart = forward_chart.loc[forward_chart["確定件数"] > 0, ["平均リターン(%)"]] if not forward_chart.empty else pd.DataFrame()
     if not matured_chart.empty:
         st.markdown("#### 可視化：◎☆後の平均リターン")
@@ -1914,8 +1930,6 @@ def _render_history_star_validation(evaluation: pd.DataFrame) -> None:
 
     st.markdown("#### どの条件がその後の成績と結びついたか")
     st.caption("この集計は日次履歴が更新されたときだけ再計算し、通常の画面再描画ではキャッシュを利用します。")
-    all_analysis_signature = _analysis_history_signature(None, None)
-    perf = _cached_condition_performance(str(ROOT), all_analysis_signature, _star_outcomes_signature())
     if perf.empty:
         st.info("条件別集計に必要な日次分析履歴がまだ不足しています。")
     else:

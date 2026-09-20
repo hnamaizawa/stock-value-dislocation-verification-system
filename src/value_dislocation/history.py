@@ -37,6 +37,17 @@ def _safe_code_series(frame: pd.DataFrame) -> pd.Series:
     return frame.get("code", pd.Series(index=frame.index, dtype=str)).astype(str)
 
 
+def _numeric_column(frame: pd.DataFrame, column: str) -> pd.Series:
+    """Return one numeric Series even when an older persisted frame lacks the column."""
+    if column not in frame.columns:
+        return pd.Series(index=frame.index, dtype=float)
+    values = frame[column]
+    if isinstance(values, pd.DataFrame):
+        # Defensive compatibility for accidentally duplicated persisted columns.
+        values = values.iloc[:, -1] if values.shape[1] else pd.Series(index=frame.index, dtype=float)
+    return pd.to_numeric(values, errors="coerce")
+
+
 def _coerce_bool_series(series: pd.Series | pd.DataFrame) -> pd.Series:
     """Coerce persisted bool-like values to one stable 1-D boolean mask.
 
@@ -662,7 +673,7 @@ def summarize_star_outcomes_by_code(events: pd.DataFrame) -> pd.DataFrame:
     frame["_star_date"] = pd.to_datetime(frame.get("star_date"), errors="coerce")
     frame["_entry_price"] = pd.to_numeric(frame.get("entry_price"), errors="coerce")
     for horizon in STAR_OUTCOME_HORIZONS:
-        frame[f"_return_{horizon}d"] = pd.to_numeric(frame.get(f"return_{horizon}d"), errors="coerce")
+        frame[f"_return_{horizon}d"] = _numeric_column(frame, f"return_{horizon}d")
 
     rows: list[dict] = []
     for code, group in frame.groupby("code", sort=False, dropna=False):
@@ -685,6 +696,122 @@ def summarize_star_outcomes_by_code(events: pd.DataFrame) -> pd.DataFrame:
             row[f"completed_{horizon}d"] = int(len(values))
         rows.append(row)
     return pd.DataFrame(rows)
+
+def _summary_text_column(frame: pd.DataFrame | None, column: str) -> pd.Series:
+    if frame is None:
+        return pd.Series(dtype="string")
+    if column not in frame.columns:
+        return pd.Series("", index=frame.index, dtype="string")
+    values = frame[column]
+    if isinstance(values, pd.DataFrame):
+        values = values.iloc[:, -1] if values.shape[1] else pd.Series("", index=frame.index, dtype="string")
+    return values.fillna("").astype("string").str.strip()
+
+
+def _summary_date_span(frame: pd.DataFrame, column: str) -> str:
+    if frame is None or frame.empty or column not in frame.columns:
+        return "期間不明"
+    dates = pd.to_datetime(_summary_text_column(frame, column), errors="coerce").dropna()
+    if dates.empty:
+        return "期間不明"
+    first = dates.min().date().isoformat()
+    last = dates.max().date().isoformat()
+    return first if first == last else f"{first}〜{last}"
+
+
+def daily_history_text_summary(history: pd.DataFrame) -> list[str]:
+    """Build a short deterministic summary for the filtered daily-history view."""
+    if history is None or history.empty:
+        return ["現在の条件に該当する日次分析履歴はありません。"]
+    frame = history.copy()
+    codes = _summary_text_column(frame, "code")
+    unique_codes = int(codes.loc[codes.ne("")].nunique())
+    lines = [f"表示中は {len(frame):,} 件（{unique_codes:,} 銘柄）、対象期間は {_summary_date_span(frame, 'analysis_date')} です。"]
+    symbols = _summary_text_column(frame, "final_evaluation")
+    symbol_counts = symbols.loc[symbols.ne("")].value_counts()
+    if not symbol_counts.empty:
+        top_symbol = str(symbol_counts.index[0])
+        top_count = int(symbol_counts.iloc[0])
+        lines.append(f"最終評価では「{top_symbol}」が最多で {top_count:,} 件（{top_count / len(frame) * 100:.1f}%）です。")
+    positive = int(symbols.isin(["◎☆", "◎", "○"]).sum())
+    cautious = int(symbols.isin(["△", "×"]).sum())
+    if positive or cautious:
+        lines.append(f"◎☆/◎/○ は計 {positive:,} 件、△/× は計 {cautious:,} 件です。")
+    statuses = _summary_text_column(frame, "evaluation_status")
+    unassessed = int(statuses.eq("未評価").sum())
+    if unassessed:
+        reasons = _summary_text_column(frame.loc[statuses.eq("未評価")], "unassessed_reason")
+        reason_counts = reasons.loc[reasons.ne("")].value_counts()
+        reason_text = f" 主因は「{reason_counts.index[0]}」です。" if not reason_counts.empty else ""
+        lines.append(f"未評価が {unassessed:,} 件（{unassessed / len(frame) * 100:.1f}%）残っています。{reason_text}".strip())
+    return lines[:4]
+
+
+def evaluation_history_text_summary(evaluations: pd.DataFrame) -> list[str]:
+    """Build a short deterministic summary for the filtered final-evaluation history."""
+    if evaluations is None or evaluations.empty:
+        return ["現在の条件に該当する評価履歴はありません。"]
+    frame = evaluations.copy()
+    codes = _summary_text_column(frame, "code")
+    unique_codes = int(codes.loc[codes.ne("")].nunique())
+    lines = [f"表示中は {len(frame):,} 件（{unique_codes:,} 銘柄）、評価日は {_summary_date_span(frame, 'evaluation_date')} です。"]
+    symbols = _summary_text_column(frame, "intuitive_symbol")
+    counts = symbols.loc[symbols.ne("")].value_counts()
+    if not counts.empty:
+        top_symbol = str(counts.index[0])
+        top_count = int(counts.iloc[0])
+        lines.append(f"保存評価では「{top_symbol}」が最多で {top_count:,} 件（{top_count / len(frame) * 100:.1f}%）です。")
+    high = int(symbols.isin(["◎☆", "◎"]).sum())
+    watch = int(symbols.isin(["○", "△"]).sum())
+    avoid = int(symbols.eq("×").sum())
+    if high or watch or avoid:
+        lines.append(f"◎☆/◎ は {high:,} 件、○/△ は {watch:,} 件、× は {avoid:,} 件です。")
+    statuses = _summary_text_column(frame, "evaluation_status")
+    backfilled = int(statuses.eq("後日補完").sum())
+    if backfilled:
+        lines.append(f"後日補完された評価が {backfilled:,} 件あり、当日評価とは区別して保存されています。")
+    return lines[:4]
+
+
+def star_validation_text_summary(
+    events: pd.DataFrame,
+    forward_summary: pd.DataFrame,
+    condition_perf: pd.DataFrame | None = None,
+    *,
+    condition_horizon: int = 90,
+) -> list[str]:
+    """Build a compact non-causal summary of ◎☆ forward-return validation."""
+    if events is None or events.empty:
+        return ["◎☆開始イベントがまだないため、実績サマリを作成できません。"]
+    codes = _summary_text_column(events, "code")
+    unique_codes = int(codes.loc[codes.ne("")].nunique())
+    lines = [f"◎☆開始イベントは {len(events):,} 件、対象は {unique_codes:,} 銘柄です。"]
+
+    forward = pd.DataFrame() if forward_summary is None else forward_summary.reset_index().copy()
+    if not forward.empty and {"期間", "平均リターン(%)", "確定件数"}.issubset(forward.columns):
+        forward["平均リターン(%)"] = pd.to_numeric(forward["平均リターン(%)"], errors="coerce")
+        forward["確定件数"] = pd.to_numeric(forward["確定件数"], errors="coerce").fillna(0)
+        matured = forward.loc[(forward["確定件数"] > 0) & forward["平均リターン(%)"].notna()].copy()
+        if matured.empty:
+            lines.append("10〜180日の将来リターンはまだ十分に確定していません。")
+        else:
+            best = matured.sort_values("平均リターン(%)", ascending=False).iloc[0]
+            lines.append(f"確定済み期間では {best['期間']} の平均リターンが最も高く {float(best['平均リターン(%)']):+.1f}%（{int(best['確定件数']):,}件）です。")
+            positive_periods = int((matured["平均リターン(%)"] > 0).sum())
+            lines.append(f"平均リターンがプラスの期間は、確定済み {len(matured):,} 期間中 {positive_periods:,} 期間です。")
+
+    perf = pd.DataFrame() if condition_perf is None else condition_perf.copy()
+    avg_col = f"{condition_horizon}日平均"
+    count_col = f"{condition_horizon}日確定件数"
+    if not perf.empty and {"条件", avg_col, count_col}.issubset(perf.columns):
+        perf[avg_col] = pd.to_numeric(perf[avg_col], errors="coerce")
+        perf[count_col] = pd.to_numeric(perf[count_col], errors="coerce").fillna(0)
+        usable = perf.loc[(perf[count_col] > 0) & perf[avg_col].notna()].copy()
+        if not usable.empty:
+            best_condition = usable.sort_values(avg_col, ascending=False).iloc[0]
+            lines.append(f"条件別では「{best_condition['条件']}」の{condition_horizon}日平均が最も高く {float(best_condition[avg_col]) * 100:+.1f}%（{int(best_condition[count_col]):,}件）です。因果関係ではなく参考傾向です。")
+    return lines[:4]
+
 
 EVALUATION_SYMBOL_ORDER = ["◎☆", "◎", "○", "△", "×", "未評価", "対象外"]
 
@@ -733,7 +860,7 @@ def star_forward_return_summary(events: pd.DataFrame) -> pd.DataFrame:
     rows = []
     frame = pd.DataFrame() if events is None else events
     for horizon in STAR_OUTCOME_HORIZONS:
-        values = pd.to_numeric(frame.get(f"return_{horizon}d", pd.Series(dtype=float)), errors="coerce").dropna()
+        values = _numeric_column(frame, f"return_{horizon}d").dropna()
         rows.append({
             "期間": f"{horizon}日",
             "平均リターン(%)": float(values.mean() * 100) if len(values) else None,
@@ -803,7 +930,7 @@ def condition_performance(project_root: Path, star_events: pd.DataFrame | None =
         subset = merged.loc[mask.fillna(False)]
         row={"条件": label, "該当イベント数": int(len(subset)), "全イベント数": int(len(merged))}
         for h in STAR_OUTCOME_HORIZONS:
-            r=pd.to_numeric(subset.get(f"return_{h}d"), errors="coerce").dropna()
+            r = _numeric_column(subset, f"return_{h}d").dropna()
             row[f"{h}日平均"] = float(r.mean()) if not r.empty else None
             row[f"{h}日プラス率"] = float((r>0).mean()) if not r.empty else None
             row[f"{h}日確定件数"] = int(len(r))

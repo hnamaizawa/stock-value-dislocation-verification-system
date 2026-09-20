@@ -281,7 +281,7 @@ def _passes(values: pd.Series, spec: RuleSpec, threshold: float) -> pd.Series:
 
 
 def _metrics(frame: pd.DataFrame, horizon: int) -> dict[str, float | int | None]:
-    values = pd.to_numeric(frame.get(f"return_{horizon}d"), errors="coerce").dropna()
+    values = pd.to_numeric(frame.get(f"return_{horizon}d", pd.Series(index=frame.index, dtype=float)), errors="coerce").dropna()
     if values.empty:
         return {"count": 0, "mean": None, "median": None, "positive_rate": None}
     return {
@@ -314,7 +314,7 @@ def _evaluate_candidate(
     if eligible.empty or spec.metric not in eligible.columns:
         return None
     primary = int(settings.get("primary_horizon_days", 90))
-    eligible = eligible.loc[pd.to_numeric(eligible.get(f"return_{primary}d"), errors="coerce").notna()].copy()
+    eligible = eligible.loc[pd.to_numeric(eligible.get(f"return_{primary}d", pd.Series(index=eligible.index, dtype=float)), errors="coerce").notna()].copy()
     if eligible.empty:
         return None
 
