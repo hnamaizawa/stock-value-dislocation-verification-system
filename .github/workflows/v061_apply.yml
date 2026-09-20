@@ -31,6 +31,8 @@ jobs:
           python -m pip install -e ".[dashboard,dev]"
       - name: Run pytest
         run: python -m pytest tests/
+      - name: Remove temporary pytest-shaped helper
+        run: rm -f scripts/fix_v061_readme_test.py
       - name: Run harness checks
         run: python scripts/harness_check.py
       - name: Commit validated changes
