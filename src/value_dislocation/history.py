@@ -37,6 +37,17 @@ def _safe_code_series(frame: pd.DataFrame) -> pd.Series:
     return frame.get("code", pd.Series(index=frame.index, dtype=str)).astype(str)
 
 
+def _numeric_column(frame: pd.DataFrame, column: str) -> pd.Series:
+    """Return one numeric Series even when an older persisted frame lacks the column."""
+    if column not in frame.columns:
+        return pd.Series(index=frame.index, dtype=float)
+    values = frame[column]
+    if isinstance(values, pd.DataFrame):
+        # Defensive compatibility for accidentally duplicated persisted columns.
+        values = values.iloc[:, -1] if values.shape[1] else pd.Series(index=frame.index, dtype=float)
+    return pd.to_numeric(values, errors="coerce")
+
+
 def _coerce_bool_series(series: pd.Series | pd.DataFrame) -> pd.Series:
     """Coerce persisted bool-like values to one stable 1-D boolean mask.
 
@@ -662,7 +673,7 @@ def summarize_star_outcomes_by_code(events: pd.DataFrame) -> pd.DataFrame:
     frame["_star_date"] = pd.to_datetime(frame.get("star_date"), errors="coerce")
     frame["_entry_price"] = pd.to_numeric(frame.get("entry_price"), errors="coerce")
     for horizon in STAR_OUTCOME_HORIZONS:
-        frame[f"_return_{horizon}d"] = pd.to_numeric(frame.get(f"return_{horizon}d"), errors="coerce")
+        frame[f"_return_{horizon}d"] = _numeric_column(frame, f"return_{horizon}d")
 
     rows: list[dict] = []
     for code, group in frame.groupby("code", sort=False, dropna=False):
@@ -733,7 +744,7 @@ def star_forward_return_summary(events: pd.DataFrame) -> pd.DataFrame:
     rows = []
     frame = pd.DataFrame() if events is None else events
     for horizon in STAR_OUTCOME_HORIZONS:
-        values = pd.to_numeric(frame.get(f"return_{horizon}d", pd.Series(dtype=float)), errors="coerce").dropna()
+        values = _numeric_column(frame, f"return_{horizon}d").dropna()
         rows.append({
             "期間": f"{horizon}日",
             "平均リターン(%)": float(values.mean() * 100) if len(values) else None,
@@ -803,7 +814,7 @@ def condition_performance(project_root: Path, star_events: pd.DataFrame | None =
         subset = merged.loc[mask.fillna(False)]
         row={"条件": label, "該当イベント数": int(len(subset)), "全イベント数": int(len(merged))}
         for h in STAR_OUTCOME_HORIZONS:
-            r=pd.to_numeric(subset.get(f"return_{h}d"), errors="coerce").dropna()
+            r = _numeric_column(subset, f"return_{h}d").dropna()
             row[f"{h}日平均"] = float(r.mean()) if not r.empty else None
             row[f"{h}日プラス率"] = float((r>0).mean()) if not r.empty else None
             row[f"{h}日確定件数"] = int(len(r))

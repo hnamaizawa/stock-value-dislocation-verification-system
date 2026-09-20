@@ -1860,7 +1860,7 @@ def _render_history_star_validation(evaluation: pd.DataFrame) -> None:
             )
 
     completed_by_horizon = {
-        horizon: pd.to_numeric(star_events.get(f"return_{horizon}d"), errors="coerce").dropna()
+        horizon: pd.to_numeric(star_events.get(f"return_{horizon}d", pd.Series(index=star_events.index, dtype=float)), errors="coerce").dropna()
         for horizon in STAR_OUTCOME_HORIZONS
     }
     unique_star_codes = star_events.get("code", pd.Series(dtype=str)).dropna().astype(str).nunique()
