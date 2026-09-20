@@ -26,6 +26,8 @@ CONDITION_RULES = [
     ("20日平均日中値幅 2.5%以上", "average_intraday_range_20d", ">=", 0.025),
 ]
 
+STAR_OUTCOME_HORIZONS = (10, 20, 30, 60, 90, 180)
+
 
 def history_root(project_root: Path) -> Path:
     return Path(project_root) / "data" / "history"
@@ -525,7 +527,7 @@ def load_evaluation_history(project_root: Path) -> pd.DataFrame:
     return frame
 
 
-def build_star_events(evaluations: pd.DataFrame, horizons: Iterable[int] = (30, 90, 180)) -> pd.DataFrame:
+def build_star_events(evaluations: pd.DataFrame, horizons: Iterable[int] = STAR_OUTCOME_HORIZONS) -> pd.DataFrame:
     """Build one event per observed transition into ◎☆ and compute saved-price forward returns.
 
     Rows whose Yahoo evaluation was skipped/failed do not end an existing star episode.
@@ -573,7 +575,7 @@ def reconcile_star_outcomes(evaluations: pd.DataFrame, saved_events: pd.DataFram
     """Rebuild the complete ◎☆ event set from evaluation history while preserving saved outcomes.
 
     Evaluation history is the source of truth for which star events exist.  Saved
-    30/90/180-day returns are carried forward by (code, star_date), so adding an
+    10/20/30/60/90/180-day returns are carried forward by (code, star_date), so adding an
     older/missing event never discards already-enriched forward-return data.
     """
     rebuilt = build_star_events(evaluations)
@@ -590,11 +592,9 @@ def reconcile_star_outcomes(evaluations: pd.DataFrame, saved_events: pd.DataFram
     rebuilt["star_date"] = rebuilt["star_date"].astype(str)
     saved["star_date"] = saved["star_date"].astype(str)
     saved_by_key = saved.drop_duplicates(["code", "star_date"], keep="last").set_index(["code", "star_date"])
-    preserve = [
-        "entry_price",
-        "return_30d", "return_90d", "return_180d",
-        "actual_days_30d", "actual_days_90d", "actual_days_180d",
-    ]
+    preserve = ["entry_price"]
+    for horizon in STAR_OUTCOME_HORIZONS:
+        preserve.extend([f"return_{horizon}d", f"actual_days_{horizon}d"])
     for idx, row in rebuilt.iterrows():
         key = (str(row.get("code", "")), str(row.get("star_date", "")))
         if key not in saved_by_key.index:
@@ -608,7 +608,7 @@ def reconcile_star_outcomes(evaluations: pd.DataFrame, saved_events: pd.DataFram
                 rebuilt.at[idx, col] = value
     return rebuilt.sort_values(["star_date", "code"], ascending=[True, True]).reset_index(drop=True)
 
-def enrich_star_events_with_market_histories(star_events: pd.DataFrame, histories: dict[str, pd.DataFrame], horizons: Iterable[int] = (30, 90, 180)) -> pd.DataFrame:
+def enrich_star_events_with_market_histories(star_events: pd.DataFrame, histories: dict[str, pd.DataFrame], horizons: Iterable[int] = STAR_OUTCOME_HORIZONS) -> pd.DataFrame:
     """Fill forward returns from externally supplied daily histories without fetching data here."""
     if star_events.empty:
         return star_events.copy()
@@ -652,7 +652,7 @@ def summarize_star_outcomes_by_code(events: pd.DataFrame) -> pd.DataFrame:
     Event-level rows remain the source of truth.  This helper is only a view-layer
     summary: repeated transitions into ◎☆ are collapsed by code while preserving
     the first/latest dates, event count, latest entry price and mean matured
-    30/90/180-day returns.
+    10/20/30/60/90/180-day returns.
     """
     if events is None or events.empty or "code" not in events.columns:
         return pd.DataFrame()
@@ -661,7 +661,7 @@ def summarize_star_outcomes_by_code(events: pd.DataFrame) -> pd.DataFrame:
     frame["code"] = frame["code"].astype(str)
     frame["_star_date"] = pd.to_datetime(frame.get("star_date"), errors="coerce")
     frame["_entry_price"] = pd.to_numeric(frame.get("entry_price"), errors="coerce")
-    for horizon in (30, 90, 180):
+    for horizon in STAR_OUTCOME_HORIZONS:
         frame[f"_return_{horizon}d"] = pd.to_numeric(frame.get(f"return_{horizon}d"), errors="coerce")
 
     rows: list[dict] = []
@@ -679,7 +679,7 @@ def summarize_star_outcomes_by_code(events: pd.DataFrame) -> pd.DataFrame:
             "star_count": int(len(g)),
             "latest_entry_price": latest.get("_entry_price"),
         }
-        for horizon in (30, 90, 180):
+        for horizon in STAR_OUTCOME_HORIZONS:
             values = g[f"_return_{horizon}d"].dropna()
             row[f"return_{horizon}d_avg"] = float(values.mean()) if len(values) else None
             row[f"completed_{horizon}d"] = int(len(values))
@@ -729,10 +729,10 @@ def evaluation_symbol_counts(evaluations: pd.DataFrame) -> pd.DataFrame:
 
 
 def star_forward_return_summary(events: pd.DataFrame) -> pd.DataFrame:
-    """Summarize matured ◎☆ forward returns by 30/90/180-day horizon for charts."""
+    """Summarize matured ◎☆ forward returns by configured short/medium horizons for charts."""
     rows = []
     frame = pd.DataFrame() if events is None else events
-    for horizon in (30, 90, 180):
+    for horizon in STAR_OUTCOME_HORIZONS:
         values = pd.to_numeric(frame.get(f"return_{horizon}d", pd.Series(dtype=float)), errors="coerce").dropna()
         rows.append({
             "期間": f"{horizon}日",
@@ -802,7 +802,7 @@ def condition_performance(project_root: Path, star_events: pd.DataFrame | None =
         mask = vals >= threshold if op == ">=" else vals <= threshold
         subset = merged.loc[mask.fillna(False)]
         row={"条件": label, "該当イベント数": int(len(subset)), "全イベント数": int(len(merged))}
-        for h in (30,90,180):
+        for h in STAR_OUTCOME_HORIZONS:
             r=pd.to_numeric(subset.get(f"return_{h}d"), errors="coerce").dropna()
             row[f"{h}日平均"] = float(r.mean()) if not r.empty else None
             row[f"{h}日プラス率"] = float((r>0).mean()) if not r.empty else None
