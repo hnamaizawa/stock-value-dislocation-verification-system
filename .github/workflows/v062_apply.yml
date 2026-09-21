@@ -22,7 +22,7 @@ jobs:
           python-version: '3.12'
           cache: pip
       - name: Apply v0.6.62 patch
-        run: python scripts/apply_v062_patch.py
+        run: python scripts/run_v062_patch.py
       - name: Install project and development dependencies
         run: |
           python -m pip install --upgrade pip
@@ -33,7 +33,7 @@ jobs:
         run: python scripts/harness_check.py
       - name: Commit validated changes
         run: |
-          rm -f scripts/apply_v062_patch.py .github/workflows/v062_apply.yml
+          rm -f scripts/apply_v062_patch.py scripts/run_v062_patch.py .github/workflows/v062_apply.yml
           rm -rf src/stock_value_dislocation_verification_system.egg-info
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
