@@ -242,3 +242,12 @@ Version 0.5.1 implements the immediate performance and SBI CSV bridge improvemen
 - [x] v0.6.38 履歴・実績検証3画面へ軽量可視化（評価推移、評価構成、◎☆リターン、条件別リターン）を追加。
 
 - [x] v0.6.39 履歴・実績検証3画面の銘柄一覧から個別銘柄検索へ直接遷移。
+
+
+## v0.6.64 Walk-Forward hardening
+
+- [x] 同業種の対照群を保持し、不足分だけ同市場から補完する
+- [x] 将来リターンを取引セッション基準へ変更する
+- [x] 価格・開示のpoint-in-time切断をE2Eテストする
+- [x] 会社マスターのカバレッジと生存者バイアス警告を記録・表示する
+- [x] 新規不変条件と必須ファイルをHarnessで検査する
