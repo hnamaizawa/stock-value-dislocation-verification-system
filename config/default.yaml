@@ -24,6 +24,11 @@ screen:
   minimum_temporary_probability: 0.55
   minimum_catalyst_probability: 0.35
   minimum_equity_ratio: 0.30
+  use_structural_deterioration_guard: true
+  minimum_cash_conversion_ratio: 0.70
+  minimum_operating_margin_change_3y: -0.03
+  minimum_forecast_revision_rate: -0.10
+  minimum_sector_relative_return_6m: -0.15
   maximum_forecast_op_decline: -0.20
   minimum_drawdown_52w: -0.18
   minimum_relative_underperformance_6m: -0.08

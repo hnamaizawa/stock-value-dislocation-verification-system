@@ -161,10 +161,25 @@ def financial_features(financials: pd.DataFrame, as_of: pd.Timestamp) -> pd.Data
         latest_sales = _num(latest_actual.get("sales"))
         latest_op = _num(latest_actual.get("operating_profit"))
         op_margin = latest_op / latest_sales if latest_sales and latest_sales > 0 else np.nan
+        annual_sales = pd.to_numeric(annual.get("sales"), errors="coerce")
+        annual_op = pd.to_numeric(annual.get("operating_profit"), errors="coerce")
+        annual_margins = annual_op / annual_sales.where(annual_sales > 0)
+        valid_margins = annual_margins.dropna()
+        operating_margin_change_3y = (
+            float(valid_margins.iloc[-1] - valid_margins.iloc[0])
+            if len(valid_margins) >= 2
+            else np.nan
+        )
         ocf = pd.to_numeric(annual.get("operating_cf"), errors="coerce")
         ocf_positive_ratio = float((ocf > 0).mean()) if ocf.notna().any() else np.nan
         ocf_observed_years = int(ocf.notna().sum())
         ocf_positive_years = int((ocf > 0).sum()) if ocf.notna().any() else 0
+        latest_ocf = _num(latest_actual.get("operating_cf"))
+        cash_conversion_ratio = (
+            latest_ocf / latest_op
+            if latest_op and latest_op > 0 and not pd.isna(latest_ocf)
+            else np.nan
+        )
 
         total_assets = _num(latest_snapshot.get("total_assets"))
         equity = _num(latest_snapshot.get("equity"))
@@ -173,9 +188,44 @@ def financial_features(financials: pd.DataFrame, as_of: pd.Timestamp) -> pd.Data
         debt = _num(latest_snapshot.get("interest_bearing_debt"))
         net_cash = cash - debt if not pd.isna(cash) and not pd.isna(debt) else np.nan
 
-        forecast_rows = all_rows.dropna(subset=["forecast_operating_profit"])
-        forecast_row = forecast_rows.iloc[-1] if not forecast_rows.empty else latest_snapshot
-        forecast_op = _num(forecast_row.get("forecast_operating_profit"))
+        forecast_values = pd.to_numeric(all_rows.get("forecast_operating_profit"), errors="coerce")
+        forecast_rows = all_rows.loc[forecast_values.notna()].copy()
+        forecast_revision_rate = np.nan
+        forecast_revision_from = np.nan
+        forecast_revision_target_year = np.nan
+        if not forecast_rows.empty:
+            forecast_fy = pd.to_numeric(forecast_rows.get("fiscal_year"), errors="coerce")
+            statement_type = forecast_rows.get(
+                "statement_type", pd.Series("", index=forecast_rows.index)
+            ).astype(str).str.upper()
+            forecast_rows["_forecast_target_year"] = forecast_fy
+            fy_mask = statement_type.eq("FY") & forecast_fy.notna()
+            forecast_rows.loc[fy_mask, "_forecast_target_year"] = forecast_fy.loc[fy_mask] + 1
+            forecast_row = forecast_rows.iloc[-1]
+            forecast_op = _num(forecast_row.get("forecast_operating_profit"))
+            forecast_revision_target_year = _num(forecast_row.get("_forecast_target_year"))
+            prior_rows = forecast_rows.iloc[:-1]
+            if not pd.isna(forecast_revision_target_year):
+                prior_rows = prior_rows.loc[
+                    pd.to_numeric(prior_rows["_forecast_target_year"], errors="coerce").eq(
+                        forecast_revision_target_year
+                    )
+                ]
+            prior_values = pd.to_numeric(prior_rows.get("forecast_operating_profit"), errors="coerce")
+            if isinstance(prior_values, pd.Series) and prior_values.notna().any():
+                # If the latest disclosure simply repeats already-revised guidance, retain
+                # the most recent different guidance so a prior downward revision is not lost.
+                distinct = prior_rows.loc[
+                    prior_values.notna()
+                    & (~prior_values.eq(forecast_op))
+                ]
+                prior_row = distinct.iloc[-1] if not distinct.empty else prior_rows.iloc[-1]
+                forecast_revision_from = _num(prior_row.get("forecast_operating_profit"))
+                if forecast_revision_from and forecast_revision_from > 0 and not pd.isna(forecast_op):
+                    forecast_revision_rate = forecast_op / forecast_revision_from - 1
+        else:
+            forecast_row = latest_snapshot
+            forecast_op = _num(forecast_row.get("forecast_operating_profit"))
         forecast_op_growth = (
             forecast_op / latest_op - 1
             if latest_op and latest_op > 0 and not pd.isna(forecast_op)
@@ -224,7 +274,9 @@ def financial_features(financials: pd.DataFrame, as_of: pd.Timestamp) -> pd.Data
                 "latest_actual_period_end": latest_actual.get("period_end", latest_actual.get("fiscal_year")),
                 "sales_cagr_3y": sales_cagr_3y,
                 "operating_margin": op_margin,
+                "operating_margin_change_3y": operating_margin_change_3y,
                 "operating_profit_latest": latest_op,
+                "cash_conversion_ratio": cash_conversion_ratio,
                 "operating_cf_positive_ratio_3y": ocf_positive_ratio,
                 "operating_cf_observed_years": ocf_observed_years,
                 "operating_cf_positive_years": ocf_positive_years,
@@ -234,6 +286,9 @@ def financial_features(financials: pd.DataFrame, as_of: pd.Timestamp) -> pd.Data
                 "book_value_per_share": bps,
                 "forecast_operating_profit": forecast_op,
                 "forecast_op_growth": forecast_op_growth,
+                "forecast_revision_rate": forecast_revision_rate,
+                "forecast_revision_from": forecast_revision_from,
+                "forecast_revision_target_year": forecast_revision_target_year,
                 "actual_annual_dividend_per_share": actual_dividend,
                 "forecast_annual_dividend_per_share": forecast_dividend,
                 "dividend_forecast_source": dividend_source,

@@ -72,6 +72,13 @@ def prepare_quantitative_universe(
     merged = companies.merge(pf, on="code", how="inner").merge(ff, on="code", how="inner")
     if merged.empty:
         return merged
+    # A market-relative fall can be sector-wide rather than company-specific.  Keep
+    # a separate same-sector context so unusually weak company-specific performance
+    # can be treated as a possible structural problem rather than a bargain signal.
+    merged["sector_peer_count_6m"] = merged.groupby("sector")["return_6m"].transform("count")
+    merged["sector_return_6m_median"] = merged.groupby("sector")["return_6m"].transform("median")
+    merged["sector_relative_return_6m"] = merged["return_6m"] - merged["sector_return_6m_median"]
+    merged.loc[merged["sector_peer_count_6m"] < 5, "sector_relative_return_6m"] = np.nan
     for key, value in EVENT_PLACEHOLDERS.items():
         merged[key] = value
     if "shares_outstanding" not in merged.columns:
@@ -207,6 +214,49 @@ def apply_quantitative_criteria(
             | (scored["forecast_op_growth"] >= forecast_threshold)
         )
 
+    use_structural_guard = bool(s.get("use_structural_deterioration_guard", True))
+    cash_conversion = _numeric_series(scored, "cash_conversion_ratio", index)
+    margin_change = _numeric_series(scored, "operating_margin_change_3y", index)
+    forecast_revision = _numeric_series(scored, "forecast_revision_rate", index)
+    sector_relative = _numeric_series(scored, "sector_relative_return_6m", index)
+    if use_structural_guard:
+        scored["pass_cash_conversion"] = cash_conversion.isna() | (
+            cash_conversion >= float(s.get("minimum_cash_conversion_ratio", 0.70))
+        )
+        scored["pass_margin_stability"] = margin_change.isna() | (
+            margin_change >= float(s.get("minimum_operating_margin_change_3y", -0.03))
+        )
+        scored["pass_forecast_revision"] = forecast_revision.isna() | (
+            forecast_revision >= float(s.get("minimum_forecast_revision_rate", -0.10))
+        )
+        scored["pass_sector_relative"] = sector_relative.isna() | (
+            sector_relative >= float(s.get("minimum_sector_relative_return_6m", -0.15))
+        )
+    else:
+        for column in (
+            "pass_cash_conversion", "pass_margin_stability",
+            "pass_forecast_revision", "pass_sector_relative",
+        ):
+            scored[column] = True
+    structural_columns = [
+        "pass_cash_conversion", "pass_margin_stability",
+        "pass_forecast_revision", "pass_sector_relative",
+    ]
+    scored["pass_structural_deterioration_guard"] = scored[structural_columns].all(axis=1)
+
+    structural_labels = {
+        "pass_cash_conversion": "利益の質（営業CF÷営業利益）",
+        "pass_margin_stability": "営業利益率の悪化",
+        "pass_forecast_revision": "会社予想の下方修正",
+        "pass_sector_relative": "同業他社対比の異常な弱さ",
+    }
+    scored["structural_guard_failures"] = scored.apply(
+        lambda row: " / ".join(
+            label for column, label in structural_labels.items() if not bool(row.get(column, True))
+        ),
+        axis=1,
+    )
+
     require_dividend = bool(s.get("require_dividend", False))
     dividend_available = scored.get("dividend_data_available", False)
     if not isinstance(dividend_available, pd.Series):
@@ -253,7 +303,7 @@ def apply_quantitative_criteria(
         s.get("minimum_daytrade_activity_score", 50.0)
     )
 
-    hard_columns = REQUIRED_CHECK_COLUMNS + ["pass_dividend_conditions"]
+    hard_columns = REQUIRED_CHECK_COLUMNS + ["pass_structural_deterioration_guard", "pass_dividend_conditions"]
     scored["hard_filter_pass"] = scored[hard_columns].all(axis=1)
     minimum_score = float(s.get("quantitative_min_score", 42))
     scored["pass_quantitative_score"] = scored["quantitative_score"] >= minimum_score
@@ -281,6 +331,7 @@ def apply_quantitative_criteria(
         ("pass_drawdown", "52週高値からの下落"),
         ("pass_relative_underperformance", "市場比較相対下落"),
         ("pass_forecast", "会社予想"),
+        ("pass_structural_deterioration_guard", "構造悪化ガード"),
         ("pass_dividend_conditions", "配当条件"),
         ("pass_quantitative_score", "定量スコア"),
         ("pass_daytrade_volatility", "60日ボラティリティ"),
@@ -302,6 +353,18 @@ def apply_quantitative_criteria(
             warnings.append("正式TOPIX・ETF代理値とも利用できず相対下落条件を適用していません")
         if pd.isna(row.get("forecast_op_growth")):
             warnings.append("会社予想データなし")
+        if use_structural_guard:
+            if pd.isna(row.get("cash_conversion_ratio")):
+                warnings.append("利益現金化率データなし")
+            if pd.isna(row.get("operating_margin_change_3y")):
+                warnings.append("営業利益率の推移データ不足")
+            if pd.isna(row.get("forecast_revision_rate")):
+                warnings.append("比較可能な会社予想修正履歴なし")
+            if pd.isna(row.get("sector_relative_return_6m")):
+                warnings.append("同業比較に必要な6か月株価データ不足")
+            failures = str(row.get("structural_guard_failures", "") or "").strip()
+            if failures:
+                warnings.append(f"構造悪化ガード不通過: {failures}")
         if pd.isna(row.get("operating_cf_positive_ratio_3y")):
             warnings.append("営業CF履歴不足")
         if int(row.get("financial_history_years", 0) or 0) < 3:
@@ -383,8 +446,9 @@ def screening_funnel(table: pd.DataFrame) -> list[dict[str, int | str]]:
             ),
             ("価格下落条件", REQUIRED_CHECK_COLUMNS[:-1]),
             ("会社予想条件", REQUIRED_CHECK_COLUMNS),
-            ("配当条件", REQUIRED_CHECK_COLUMNS + ["pass_dividend_conditions"]),
-            ("定量スコア", REQUIRED_CHECK_COLUMNS + ["pass_dividend_conditions", "pass_quantitative_score"]),
+            ("構造悪化ガード", REQUIRED_CHECK_COLUMNS + ["pass_structural_deterioration_guard"]),
+            ("配当条件", REQUIRED_CHECK_COLUMNS + ["pass_structural_deterioration_guard", "pass_dividend_conditions"]),
+            ("定量スコア", REQUIRED_CHECK_COLUMNS + ["pass_structural_deterioration_guard", "pass_dividend_conditions", "pass_quantitative_score"]),
         ]
     result: list[dict[str, int | str]] = []
     for label, columns in stages:

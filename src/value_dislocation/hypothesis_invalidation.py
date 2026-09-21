@@ -12,6 +12,10 @@ import pandas as pd
 METRIC_DEFINITIONS: dict[str, dict[str, str]] = {
     "sales_cagr_3y": {"label": "売上CAGR（3年）", "unit": "%", "scale": "percent"},
     "operating_margin": {"label": "営業利益率", "unit": "%", "scale": "percent"},
+    "operating_margin_change_3y": {"label": "営業利益率変化（直近最大3期）", "unit": "%", "scale": "percent"},
+    "cash_conversion_ratio": {"label": "利益現金化率（営業CF÷営業利益）", "unit": "%", "scale": "percent"},
+    "forecast_revision_rate": {"label": "会社予想営業利益の修正率", "unit": "%", "scale": "percent"},
+    "sector_relative_return_6m": {"label": "6か月騰落率の業種中央値比", "unit": "%", "scale": "percent"},
     "operating_profit_latest": {"label": "直近営業利益", "unit": "円", "scale": "raw"},
     "operating_cf_positive_ratio_3y": {"label": "営業CFプラス比率（直近最大3期）", "unit": "%", "scale": "percent"},
     "equity_ratio": {"label": "自己資本比率", "unit": "%", "scale": "percent"},

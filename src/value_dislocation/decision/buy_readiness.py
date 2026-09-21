@@ -56,6 +56,10 @@ def build_buy_readiness(
     margin = _number(metrics.get("operating_margin"))
     equity = _number(metrics.get("equity_ratio"))
     ocf = _number(metrics.get("operating_cf_positive_ratio_3y"))
+    cash_quality = _number(metrics.get("cash_conversion_ratio"))
+    margin_change = _number(metrics.get("operating_margin_change_3y"))
+    forecast_revision = _number(metrics.get("forecast_revision_rate"))
+    sector_relative = _number(metrics.get("sector_relative_return_6m"))
     forecast = _number(metrics.get("forecast_op_growth"))
     div_yield = _number(metrics.get("forecast_dividend_yield"))
     payout = _number(metrics.get("payout_ratio"))
@@ -79,6 +83,14 @@ def build_buy_readiness(
                f"自己資本比率 {equity:.1%}" if equity is not None else "自己資本比率", 12),
         _check("ocf", "現金創出の継続性", ocf, lambda x: x >= 0.999, lambda x: x >= 0.66,
                f"営業CFプラス比率 {ocf:.0%}" if ocf is not None else "営業CF履歴", 12),
+        _check("cash_quality", "利益の質", cash_quality, lambda x: x >= 0.80, lambda x: x >= 0.50,
+               f"営業CF÷営業利益 {cash_quality:.0%}" if cash_quality is not None else "利益現金化率", 8),
+        _check("margin_stability", "採算の安定性", margin_change, lambda x: x >= -0.02, lambda x: x >= -0.05,
+               f"営業利益率変化 {margin_change:+.1%}" if margin_change is not None else "営業利益率変化", 6),
+        _check("forecast_revision", "会社予想の修正方向", forecast_revision, lambda x: x >= -0.05, lambda x: x >= -0.15,
+               f"同一年度の前回予想比 {forecast_revision:+.1%}" if forecast_revision is not None else "会社予想修正", 8),
+        _check("sector_relative", "同業他社対比", sector_relative, lambda x: x >= -0.10, lambda x: x >= -0.20,
+               f"業種中央値比 {sector_relative:+.1%}" if sector_relative is not None else "業種中央値比", 6),
         _check("forecast", "会社予想", forecast, lambda x: x >= 0, lambda x: x >= -0.15,
                f"予想営業利益変化 {forecast:.1%}" if forecast is not None else "会社予想", 10),
         _check("dividend", "配当の魅力", div_yield, lambda x: 0.025 <= x <= 0.06, lambda x: 0 < x <= 0.08,
@@ -109,7 +121,10 @@ def build_buy_readiness(
     warnings = [c for c in checks if c.status in {"warn", "unknown"}]
     positives = [c for c in checks if c.status == "pass"]
 
-    hard_failure_keys = {"equity", "ocf", "forecast", "margin", "trend"}
+    hard_failure_keys = {
+        "equity", "ocf", "cash_quality", "margin_stability",
+        "forecast_revision", "sector_relative", "forecast", "margin", "trend",
+    }
     hard_failures = [c for c in failures if c.key in hard_failure_keys]
     if hard_failures:
         decision = "見送り優先"
@@ -162,7 +177,16 @@ def build_intuitive_signal(readiness: dict[str, Any], trend_transition: dict[str
     checks = readiness.get("checks", []) or []
     core_keys = {"sales", "margin", "equity", "ocf", "forecast", "payout", "div_change", "trend"}
     core_checks = [item for item in checks if item.get("key") in core_keys]
-    core_clear = bool(core_checks) and all(item.get("status") == "pass" for item in core_checks)
+    structural_keys = {"cash_quality", "margin_stability", "forecast_revision", "sector_relative"}
+    structural_checks = [item for item in checks if item.get("key") in structural_keys]
+    # Missing optional structural evidence does not fabricate a failure, but a known
+    # warn/fail blocks the highest ◎☆ quality badge until the concern is resolved.
+    structural_clear = all(item.get("status") in {"pass", "unknown"} for item in structural_checks)
+    core_clear = (
+        bool(core_checks)
+        and all(item.get("status") == "pass" for item in core_checks)
+        and structural_clear
+    )
     has_failure = any(item.get("status") == "fail" for item in checks)
 
     legacy_star = bool(level == "consider" and score >= 85 and current_score >= 2 and core_clear and not has_failure)

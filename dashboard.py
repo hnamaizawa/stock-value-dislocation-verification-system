@@ -593,7 +593,11 @@ def _load_bundle(manifest_mtime_ns: int) -> dict:
     data = load_curated_latest(ROOT)
     as_of = pd.Timestamp(data["prices"]["date"].max())
     prepared = load_feature_snapshot(ROOT / "data" / "curated" / "latest")
-    required_feature_columns = {"volatility_60d", "average_intraday_range_20d", "average_absolute_return_20d"}
+    required_feature_columns = {
+        "volatility_60d", "average_intraday_range_20d", "average_absolute_return_20d",
+        "cash_conversion_ratio", "operating_margin_change_3y",
+        "forecast_revision_rate", "sector_relative_return_6m",
+    }
     if prepared is None or not required_feature_columns.issubset(prepared.columns):
         # Rebuild from already-curated local files only. A UI/strategy change must never
         # trigger a J-Quants fetch. The next run_real will persist the new snapshot schema.
@@ -1074,6 +1078,11 @@ def _candidate_card(row: pd.Series) -> None:
         cols[6].metric("自己資本比率", _format_pct(row.get("equity_ratio")))
         cols[7].metric("予想営業利益", _format_pct(row.get("forecast_op_growth")))
         cols[8].metric("予想配当利回り", _format_pct(row.get("forecast_dividend_yield")))
+        quality_cols = st.columns(4)
+        quality_cols[0].metric("利益現金化率", _format_pct(row.get("cash_conversion_ratio")))
+        quality_cols[1].metric("営業利益率変化", _format_pct(row.get("operating_margin_change_3y")))
+        quality_cols[2].metric("会社予想修正", _format_pct(row.get("forecast_revision_rate")))
+        quality_cols[3].metric("同業中央値対比", _format_pct(row.get("sector_relative_return_6m")))
         st.write(f"通過理由: {row.get('pass_reasons', '')}")
         st.write(f"注意: {row.get('warning_reasons', '')}")
 
@@ -1155,6 +1164,11 @@ def _apply_values(overrides: dict) -> None:
     st.session_state["ui_ocf_years"] = int(round(s["minimum_operating_cf_positive_ratio_3y"] * 3))
     st.session_state["ui_sales_cagr_pct"] = int(round(s["minimum_sales_cagr_3y"] * 100))
     st.session_state["ui_op_margin_pct"] = int(round(s["minimum_operating_margin"] * 100))
+    st.session_state["ui_use_structural_guard"] = bool(s.get("use_structural_deterioration_guard", True))
+    st.session_state["ui_min_cash_conversion_pct"] = float(s.get("minimum_cash_conversion_ratio", 0.70)) * 100
+    st.session_state["ui_max_margin_deterioration_pt"] = -float(s.get("minimum_operating_margin_change_3y", -0.03)) * 100
+    st.session_state["ui_max_forecast_revision_decline_pct"] = -float(s.get("minimum_forecast_revision_rate", -0.10)) * 100
+    st.session_state["ui_max_sector_underperformance_pct"] = -float(s.get("minimum_sector_relative_return_6m", -0.15)) * 100
     st.session_state["ui_forecast_decline_pct"] = int(round(-s["maximum_forecast_op_decline"] * 100))
     st.session_state["ui_drawdown_pct"] = int(round(-s["minimum_drawdown_52w"] * 100))
     st.session_state["ui_use_relative"] = bool(s.get("use_relative_underperformance_filter", True))
@@ -1204,6 +1218,11 @@ def _initialize_condition_state() -> None:
     st.session_state.setdefault("ui_min_intraday_range_pct", 2.5)
     st.session_state.setdefault("ui_min_daytrade_score", 50)
     st.session_state.setdefault("ui_star_only", False)
+    st.session_state.setdefault("ui_use_structural_guard", True)
+    st.session_state.setdefault("ui_min_cash_conversion_pct", 70.0)
+    st.session_state.setdefault("ui_max_margin_deterioration_pt", 3.0)
+    st.session_state.setdefault("ui_max_forecast_revision_decline_pct", 10.0)
+    st.session_state.setdefault("ui_max_sector_underperformance_pct", 15.0)
 
 
 def _current_overrides() -> dict:
@@ -1218,6 +1237,11 @@ def _current_overrides() -> dict:
             "minimum_operating_cf_positive_ratio_3y": float(st.session_state["ui_ocf_years"]) / 3,
             "minimum_sales_cagr_3y": float(st.session_state["ui_sales_cagr_pct"]) / 100,
             "minimum_operating_margin": float(st.session_state["ui_op_margin_pct"]) / 100,
+            "use_structural_deterioration_guard": bool(st.session_state["ui_use_structural_guard"]),
+            "minimum_cash_conversion_ratio": float(st.session_state["ui_min_cash_conversion_pct"]) / 100,
+            "minimum_operating_margin_change_3y": -float(st.session_state["ui_max_margin_deterioration_pt"]) / 100,
+            "minimum_forecast_revision_rate": -float(st.session_state["ui_max_forecast_revision_decline_pct"]) / 100,
+            "minimum_sector_relative_return_6m": -float(st.session_state["ui_max_sector_underperformance_pct"]) / 100,
             "maximum_forecast_op_decline": -float(st.session_state["ui_forecast_decline_pct"]) / 100,
             "minimum_drawdown_52w": -float(st.session_state["ui_drawdown_pct"]) / 100,
             "minimum_relative_underperformance_6m": -float(st.session_state["ui_relative_pct"]) / 100,
@@ -1322,7 +1346,45 @@ def render_condition_builder() -> None:
             require_forecast = st.checkbox("会社予想がない銘柄を除外", value=bool(st.session_state["ui_require_forecast"]), disabled=active_mode)
             drawdown = st.slider("52週高値からの下落率（%以上）", 0, 70, value=int(st.session_state["ui_drawdown_pct"]), step=1, help=METRIC_HELP["minimum_drawdown_52w"], disabled=active_mode)
 
-        st.markdown("### 2. 配当条件")
+        st.markdown("### 2. 構造悪化ガード（バリュートラップ回避）")
+        use_structural_guard = st.checkbox(
+            "利益の質・採算悪化・会社予想修正・同業比較を必須チェックにする",
+            value=bool(st.session_state["ui_use_structural_guard"]),
+            disabled=active_mode,
+            help="過去業績が良くても企業固有の構造悪化が進んでいる銘柄を除外します。データ欠損だけでは除外せず警告します。",
+        )
+        sg1, sg2, sg3, sg4 = st.columns(4)
+        with sg1:
+            min_cash_conversion_pct = st.slider(
+                "最低 利益現金化率（%）", -100.0, 300.0,
+                value=float(st.session_state["ui_min_cash_conversion_pct"]), step=5.0,
+                disabled=active_mode or (not use_structural_guard),
+                help=METRIC_HELP["minimum_cash_conversion_ratio"],
+            )
+        with sg2:
+            max_margin_deterioration_pt = st.slider(
+                "営業利益率の最大悪化幅（pt）", 0.0, 20.0,
+                value=float(st.session_state["ui_max_margin_deterioration_pt"]), step=0.5,
+                disabled=active_mode or (not use_structural_guard),
+                help=METRIC_HELP["minimum_operating_margin_change_3y"],
+            )
+        with sg3:
+            max_forecast_revision_decline_pct = st.slider(
+                "会社予想の最大下方修正率（%）", 0.0, 50.0,
+                value=float(st.session_state["ui_max_forecast_revision_decline_pct"]), step=1.0,
+                disabled=active_mode or (not use_structural_guard),
+                help=METRIC_HELP["minimum_forecast_revision_rate"],
+            )
+        with sg4:
+            max_sector_underperformance_pct = st.slider(
+                "同業中央値への最大劣後率（6か月・%）", 0.0, 40.0,
+                value=float(st.session_state["ui_max_sector_underperformance_pct"]), step=1.0,
+                disabled=active_mode or (not use_structural_guard),
+                help=METRIC_HELP["minimum_sector_relative_return_6m"],
+            )
+        st.caption("利益現金化率=営業CF÷営業利益。営業利益率の悪化幅は直近最大3期、会社予想修正は同じ対象年度の前回予想比、同業比較は同業種の6か月騰落率中央値比です。")
+
+        st.markdown("### 3. 配当条件")
         dv1, dv2, dv3 = st.columns(3)
         with dv1:
             require_dividend = st.checkbox("配当を必須条件にする", value=bool(st.session_state["ui_require_dividend"]), disabled=active_mode)
@@ -1335,7 +1397,7 @@ def render_condition_builder() -> None:
             exclude_dividend_cut = st.checkbox("減配予想の銘柄を除外", value=bool(st.session_state["ui_exclude_dividend_cut"]), disabled=(not require_dividend) or active_mode)
         st.caption("予想配当は『次期会社予想 → 当期会社予想 → 直近実績』の順で採用します。高利回りは減配懸念で株価が下がっている場合もあります。")
 
-        st.markdown("### 3. 市場比較・相対条件")
+        st.markdown("### 4. 市場比較・相対条件")
         benchmark_options = {
             "自動（正式TOPIXを優先）": "auto",
             "正式TOPIXのみ": "official_topix",
@@ -1370,7 +1432,7 @@ def render_condition_builder() -> None:
                 disabled=active_mode or (not use_relative) or benchmark_mode == "disabled",
             )
 
-        st.markdown("### 4. 値動き活発型の条件")
+        st.markdown("### 5. 値動き活発型の条件")
         dt1, dt2, dt3 = st.columns(3)
         with dt1:
             min_volatility_pct = st.slider(
@@ -1394,7 +1456,7 @@ def render_condition_builder() -> None:
                 help="ボラティリティ45%、日中値幅35%、売買代金20%のスナップショット内順位から算出します。",
             )
 
-        st.markdown("### 5. 順位付けと表示件数")
+        st.markdown("### 6. 順位付けと表示件数")
         sc1, sc2, sc3 = st.columns(3)
         with sc1:
             min_score = st.slider("定量スコア（点以上）", 0, 80, value=int(st.session_state["ui_min_score"]), step=1, disabled=active_mode)
@@ -1416,6 +1478,11 @@ def render_condition_builder() -> None:
             "ui_ocf_years": ocf_years, "ui_sales_cagr_pct": sales_cagr,
             "ui_require_sales_history": require_sales, "ui_op_margin_pct": op_margin,
             "ui_forecast_decline_pct": forecast_decline,
+            "ui_use_structural_guard": use_structural_guard,
+            "ui_min_cash_conversion_pct": min_cash_conversion_pct,
+            "ui_max_margin_deterioration_pt": max_margin_deterioration_pt,
+            "ui_max_forecast_revision_decline_pct": max_forecast_revision_decline_pct,
+            "ui_max_sector_underperformance_pct": max_sector_underperformance_pct,
             "ui_require_forecast": require_forecast, "ui_drawdown_pct": drawdown,
             "ui_use_relative": use_relative, "ui_relative_pct": relative_pct, "ui_benchmark_mode": benchmark_mode,
             "ui_min_score": min_score, "ui_max_queue": max_queue,

@@ -9,8 +9,10 @@ import pandas as pd
 ANALYSIS_HISTORY_COLUMNS = [
     "analysis_date", "data_as_of", "run_id", "code", "name", "market", "sector", "selection_strategy",
     "selected_for_review", "strategy_score", "quantitative_score", "daytrade_activity_score",
-    "close", "drawdown_52w", "relative_return_6m", "sales_cagr_3y", "operating_margin",
-    "operating_cf_positive_ratio_3y", "equity_ratio", "forecast_op_growth",
+    "close", "drawdown_52w", "relative_return_6m", "sector_relative_return_6m",
+    "sales_cagr_3y", "operating_margin", "operating_margin_change_3y",
+    "operating_cf_positive_ratio_3y", "cash_conversion_ratio", "equity_ratio",
+    "forecast_op_growth", "forecast_revision_rate",
     "forecast_dividend_yield", "payout_ratio", "forecast_dividend_change_rate", "benchmark_source", "volatility_60d", "average_intraday_range_20d",
     "average_turnover_yen_20d", "pass_reasons", "fail_reasons", "warning_reasons",
 ]
@@ -21,6 +23,10 @@ CONDITION_RULES = [
     ("52週高値から20%以上下落", "drawdown_52w", "<=", -0.20),
     ("市場比10%以上劣後", "relative_return_6m", "<=", -0.10),
     ("会社予想営業利益が増益", "forecast_op_growth", ">=", 0.0),
+    ("利益現金化率 80%以上", "cash_conversion_ratio", ">=", 0.80),
+    ("営業利益率の悪化 3pt以内", "operating_margin_change_3y", ">=", -0.03),
+    ("会社予想の下方修正 10%以内", "forecast_revision_rate", ">=", -0.10),
+    ("業種中央値への劣後 15%以内", "sector_relative_return_6m", ">=", -0.15),
     ("予想配当利回り 3%以上", "forecast_dividend_yield", ">=", 0.03),
     ("60日ボラ 35%以上", "volatility_60d", ">=", 0.35),
     ("20日平均日中値幅 2.5%以上", "average_intraday_range_20d", ">=", 0.025),
