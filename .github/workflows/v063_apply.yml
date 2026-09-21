@@ -1,0 +1,51 @@
+name: v063 guarded implementation
+
+on:
+  push:
+    branches:
+      - feature/v0.6.63-validation-intelligence
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  apply-test-commit:
+    if: ${{ !contains(github.event.head_commit.message || '', '[v063-applied]') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out branch
+        uses: actions/checkout@v4
+        with:
+          ref: feature/v0.6.63-validation-intelligence
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+
+      - name: Apply v0.6.63 patch
+        run: python scripts/v063_patch.py
+
+      - name: Install project and development dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[dashboard,dev]"
+
+      - name: Run pytest
+        run: python -m pytest tests/
+
+      - name: Run harness checks
+        run: python scripts/harness_check.py
+
+      - name: Commit verified implementation
+        run: |
+          rm -f scripts/v063_patch.py .github/workflows/v063_apply.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "v0.6.63 strategy validation intelligence [v063-applied]"
+          git push origin HEAD:feature/v0.6.63-validation-intelligence
