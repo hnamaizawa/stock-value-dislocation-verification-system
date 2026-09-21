@@ -383,6 +383,47 @@ def check_external_event_review_gate(root: Path) -> CheckResult:
         }, ensure_ascii=False),
     )
 
+def check_walk_forward_invariants(root: Path) -> CheckResult:
+    validation_path = root / "src/value_dislocation/validation.py"
+    attribution_path = root / "src/value_dislocation/strategy/attribution.py"
+    tests_path = root / "tests/test_walkforward_controls_attribution.py"
+    docs_path = root / "docs/20_WALK_FORWARD_VALIDATION.md"
+    required_files = [validation_path, attribution_path, tests_path, docs_path]
+    missing_files = [str(path.relative_to(root)) for path in required_files if not path.exists()]
+    validation = validation_path.read_text(encoding="utf-8") if validation_path.exists() else ""
+    tests = tests_path.read_text(encoding="utf-8") if tests_path.exists() else ""
+    required_validation = [
+        "_point_in_time_inputs",
+        'future = g.loc[g["date"].dt.normalize() > anchor_day]',
+        "same_sector",
+        "same_market",
+        "missing_master_code_count",
+        "master_coverage_ratio",
+        "survivorship_bias_warning",
+    ]
+    required_tests = [
+        "test_walk_forward_filters_future_inputs_before_selection",
+        "test_forward_return_uses_trading_sessions_not_calendar_days",
+        "test_matched_controls_backfills_same_market_after_sector_priority",
+        "test_walk_forward_module_has_no_market_fetch_dependency",
+    ]
+    forbidden_fetch_terms = ["fetch_and_curate_jquants", "import yfinance", "from yfinance"]
+    missing_validation = [term for term in required_validation if term not in validation]
+    missing_tests = [term for term in required_tests if term not in tests]
+    forbidden_found = [term for term in forbidden_fetch_terms if term in validation]
+    passed = not missing_files and not missing_validation and not missing_tests and not forbidden_found
+    return CheckResult(
+        "walk_forward_invariants",
+        passed,
+        json.dumps({
+            "missing_files": missing_files,
+            "missing_validation": missing_validation,
+            "missing_tests": missing_tests,
+            "forbidden_fetch_terms": forbidden_found,
+        }, ensure_ascii=False),
+    )
+
+
 def check_blueprint(root: Path) -> CheckResult:
     blueprint = yaml.safe_load((root / "harness/app_blueprint.yaml").read_text(encoding="utf-8"))
     required_invariants = {
@@ -398,6 +439,12 @@ def check_blueprint(root: Path) -> CheckResult:
         "large_curated_bundle_must_not_be_copied_per_rerun",
         "quantitative_features_must_be_prepared_once_per_data_refresh",
         "rule_learning_must_not_rescan_all_prices_per_security",
+        "walk_forward_selection_must_not_use_future_prices",
+        "matched_controls_must_exclude_selected_securities",
+        "external_shock_attribution_must_not_replace_human_event_review",
+        "walk_forward_validation_must_not_trigger_market_data_fetch",
+        "walk_forward_horizons_must_use_trading_sessions",
+        "walk_forward_must_report_survivorship_coverage",
     }
     invariants = set(blueprint.get("non_negotiable_invariants", []))
     required_files = blueprint.get("required_files", [])
@@ -742,6 +789,7 @@ def run_checks(root: Path, include_pytest: bool = True) -> list[CheckResult]:
         check_translated_news_and_analyst_help(root),
         check_buy_decision_support(root),
         check_external_event_review_gate(root),
+        check_walk_forward_invariants(root),
         check_blueprint(root),
         check_no_sbi_secrets(root),
         check_no_sbi_browser_automation(root),
