@@ -9,7 +9,7 @@ import pandas as pd
 ANALYSIS_HISTORY_COLUMNS = [
     "analysis_date", "data_as_of", "run_id", "code", "name", "market", "sector", "selection_strategy",
     "selected_for_review", "strategy_score", "quantitative_score", "daytrade_activity_score",
-    "close", "drawdown_52w", "relative_return_6m", "sector_relative_return_6m",
+    "close", "drawdown_52w", "return_6m", "relative_return_6m", "sector_relative_return_6m",
     "sales_cagr_3y", "operating_margin", "operating_margin_change_3y",
     "operating_cf_positive_ratio_3y", "cash_conversion_ratio", "equity_ratio",
     "forecast_op_growth", "forecast_revision_rate",

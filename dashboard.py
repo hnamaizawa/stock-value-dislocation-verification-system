@@ -62,6 +62,13 @@ from value_dislocation.history import (
     star_validation_text_summary,
     write_star_outcomes,
 )
+from value_dislocation.strategy_validation import (
+    latest_external_shock_attribution,
+    matched_peer_event_comparison,
+    matched_peer_summary,
+    walk_forward_events,
+    walk_forward_summary,
+)
 from value_dislocation.hypothesis_invalidation import (
     METRIC_DEFINITIONS,
     evaluate_hypothesis_invalidation,
@@ -2027,13 +2034,104 @@ def _render_history_star_validation(evaluation: pd.DataFrame) -> None:
                 st.bar_chart(condition_chart.set_index("条件")[[avg_col]], width="stretch")
 
 
+
+def _render_strategy_validation(evaluation: pd.DataFrame) -> None:
+    """Render point-in-time strategy validation without any external data fetch."""
+    analysis_signature = _analysis_history_signature(None, None)
+    analysis = _cached_load_analysis_history(str(ROOT), "", "", False, analysis_signature)
+    if analysis.empty:
+        st.info("戦略検証に必要な日次分析履歴がまだありません。データ更新と候補分析を継続すると蓄積されます。")
+        return
+
+    st.subheader("戦略検証（Point-in-time）")
+    st.caption(
+        "保存済みの日次スナップショットと当時の評価だけを使います。現在の財務情報を過去へ差し戻さず、Yahoo/J-Quantsへの追加アクセスも行いません。"
+    )
+    signal_mode = st.segmented_control(
+        "検証するシグナル",
+        ["◎☆のみ", "◎☆+◎"],
+        default="◎☆のみ",
+        key="strategy_validation_signal_mode",
+    )
+    symbols = ("◎☆",) if signal_mode == "◎☆のみ" else ("◎☆", "◎")
+    events = walk_forward_events(analysis, evaluation, signal_symbols=symbols)
+    summary = walk_forward_summary(events)
+
+    metric_cols = st.columns(4)
+    metric_cols[0].metric("Walk-Forwardイベント", f"{len(events):,}")
+    for idx, horizon in enumerate((20, 60, 90), start=1):
+        row = summary.loc[summary["期間"].eq(f"{horizon}日")]
+        if row.empty or int(row.iloc[0]["確定件数"]) == 0:
+            metric_cols[idx].metric(f"{horizon}日", "未確定")
+        else:
+            r = row.iloc[0]
+            metric_cols[idx].metric(
+                f"{horizon}日",
+                f"{float(r['平均リターン'])*100:.1f}%",
+                f"プラス率 {float(r['プラス率'])*100:.0f}% / {int(r['確定件数'])}件",
+            )
+
+    if events.empty:
+        st.info("対象シグナルへの遷移イベントがまだありません。今後の履歴蓄積で自動的に検証可能になります。")
+    else:
+        show_summary = summary.copy()
+        for col in ["平均リターン", "中央値", "プラス率"]:
+            if col in show_summary.columns:
+                show_summary[col] = pd.to_numeric(show_summary[col], errors="coerce") * 100
+        st.markdown("#### 1. Walk-Forward実績")
+        st.dataframe(show_summary, width="stretch", hide_index=True)
+        st.caption("平均リターン・中央値・プラス率は%表示です。各期間の最初の保存済み観測日を使うため、休場日や未実行日はactual_daysが期間より長くなる場合があります。")
+        matured = show_summary.loc[show_summary["確定件数"] > 0, ["期間", "平均リターン"]]
+        if not matured.empty:
+            st.bar_chart(matured.set_index("期間"), width="stretch")
+
+        comparison = matched_peer_event_comparison(analysis, events, peer_count=5)
+        peer_summary = matched_peer_summary(comparison)
+        st.markdown("#### 2. 類似非選択銘柄との比較")
+        if peer_summary.empty or int(peer_summary["比較可能イベント"].sum()) == 0:
+            st.info("同一時点の類似非選択銘柄と将来価格がまだ不足しています。")
+        else:
+            peer_show = peer_summary.copy()
+            for col in ["シグナル平均", "類似非選択平均", "選択効果", "類似銘柄超過率"]:
+                peer_show[col] = pd.to_numeric(peer_show[col], errors="coerce") * 100
+            st.dataframe(peer_show, width="stretch", hide_index=True)
+            peer_chart = peer_show.loc[peer_show["比較可能イベント"] > 0, ["期間", "選択効果"]]
+            if not peer_chart.empty:
+                st.caption("選択効果 = シグナル銘柄のリターン − 類似非選択銘柄平均。プラスなら銘柄選択自体に付加価値があった可能性があります。")
+                st.bar_chart(peer_chart.set_index("期間"), width="stretch")
+
+    st.markdown("#### 3. External Shock Attribution（外因説明率）")
+    attribution = latest_external_shock_attribution(analysis, selected_only=True)
+    if attribution.empty:
+        st.info("最新候補の外因説明率を計算できる履歴がありません。")
+        return
+    ratios = pd.to_numeric(attribution.get("external_shock_attribution_ratio"), errors="coerce").dropna()
+    a1, a2, a3 = st.columns(3)
+    a1.metric("計算可能銘柄", f"{len(ratios):,}")
+    a2.metric("平均外因説明率", f"{ratios.mean()*100:.1f}%" if len(ratios) else "データ不足")
+    a3.metric("外因優位(50%以上)", f"{int((ratios >= 0.50).sum()):,}" if len(ratios) else "0")
+    attribution_show = attribution.copy()
+    pct_cols = [
+        "return_6m", "relative_return_6m", "sector_relative_return_6m",
+        "benchmark_return_6m_est", "sector_return_6m_est", "company_specific_component_6m",
+        "external_shock_attribution_ratio",
+    ]
+    for col in pct_cols:
+        if col in attribution_show.columns:
+            attribution_show[col] = pd.to_numeric(attribution_show[col], errors="coerce") * 100
+    st.dataframe(attribution_show, width="stretch", hide_index=True)
+    st.caption(
+        "外因説明率は市場・業種の下落で説明できる割合の目安です。v0.6.63より前の日次履歴にreturn_6mが無い場合は推測せずデータ不足とします。現時点ではhard filterには使いません。"
+    )
+
+
 def render_history_and_validation() -> None:
     st.title("履歴・実績検証")
     st.caption("日次の定量分析と、統合候補一覧で保存された◎☆/◎/○/△/×評価を後から検索します。大量履歴でも反応が落ちにくいよう、必要なセクションだけ遅延読込みします。")
 
     section = st.segmented_control(
         "履歴表示",
-        ["日次分析履歴", "評価履歴", "◎☆実績検証"],
+        ["日次分析履歴", "評価履歴", "◎☆実績検証", "戦略検証"],
         default="日次分析履歴",
         selection_mode="single",
         label_visibility="collapsed",
@@ -2046,8 +2144,10 @@ def render_history_and_validation() -> None:
         _render_history_daily(evaluation_signature)
     elif section == "評価履歴":
         _render_history_evaluations(evaluation)
-    else:
+    elif section == "◎☆実績検証":
         _render_history_star_validation(evaluation)
+    else:
+        _render_strategy_validation(evaluation)
 
 def render_sbi_csv_import() -> None:
     bundle = _bundle_or_none()

@@ -1,3 +1,11 @@
+## v0.6.63 戦略検証インテリジェンス
+- [x] Point-in-time Walk-Forward検証
+- [x] 類似非選択銘柄とのマッチド比較
+- [x] External Shock Attribution（外因説明率）
+- [x] 履歴・実績検証「戦略検証」UI
+- [x] 追加APIアクセス禁止・欠損値非推測のHarnessガード
+- [x] 回帰テスト追加
+
 ## v0.6.62 structural deterioration guards
 
 - [x] 利益現金化率（営業CF÷営業利益）を追加する。

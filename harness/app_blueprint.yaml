@@ -1,6 +1,6 @@
 schema_version: '1.0'
 blueprint_name: japanese-equity-value-dislocation-research
-blueprint_version: 0.6.62
+blueprint_version: 0.6.63
 canonical_project: stock-value-dislocation-verification-system
 purpose: Generate a local-first Japanese equity research application that retrieves
   actual market and financial data, searches listed companies, creates a quantitative
@@ -41,6 +41,9 @@ required_capabilities:
 - strict_quality_star_badge
 - reversal_confirmed_quality_star
 - structural_deterioration_value_trap_guard
+- point_in_time_walk_forward_validation
+- matched_nonselected_peer_benchmark
+- external_shock_attribution
 - legacy_vs_reversal_star_outcome_comparison
 - point_in_time_history_rule_learning
 - out_of_sample_rule_validation
@@ -78,6 +81,10 @@ non_negotiable_invariants:
 - quality_star_must_require_confirmed_short_term_reversal
 - known_structural_deterioration_must_block_value_dislocation_candidate
 - missing_structural_guard_metric_must_warn_not_fabricate_failure
+- strategy_validation_must_use_saved_point_in_time_history
+- strategy_validation_must_not_fetch_market_data
+- matched_peer_comparison_must_exclude_signal_security
+- missing_external_attribution_inputs_must_not_be_fabricated
 - legacy_star_eligibility_must_remain_comparable_after_rule_change
 - learned_rule_changes_must_not_trigger_market_data_fetch
 - learned_rules_must_use_point_in_time_history
@@ -121,6 +128,8 @@ required_files:
 - docs/17_BEGINNER_CONDITION_UI.md
 - docs/19_PERFORMANCE_OPTIMIZATION.md
 - docs/21_STRUCTURAL_DETERIORATION_GUARDS.md
+- docs/22_STRATEGY_VALIDATION_INTELLIGENCE.md
+- src/value_dislocation/strategy_validation.py
 runtime_state_exclusions:
 - .env
 - .venv

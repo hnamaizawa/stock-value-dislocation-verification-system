@@ -50,6 +50,8 @@ REQUIRED_REAL_FILES = [
     "src/value_dislocation/external_event_review.py",
     "src/value_dislocation/hypothesis_invalidation.py",
     "src/value_dislocation/history.py",
+    "src/value_dislocation/strategy_validation.py",
+    "docs/22_STRATEGY_VALIDATION_INTELLIGENCE.md",
 ]
 
 TEXT_SUFFIXES = {".py", ".ps1", ".cmd", ".yaml", ".yml", ".toml", ".md"}
@@ -541,6 +543,35 @@ def check_large_data_navigation_performance(root: Path) -> CheckResult:
     )
 
 
+
+def check_strategy_validation_intelligence(root: Path) -> CheckResult:
+    module_path = root / "src/value_dislocation/strategy_validation.py"
+    dashboard = (root / "dashboard.py").read_text(encoding="utf-8")
+    text = module_path.read_text(encoding="utf-8") if module_path.exists() else ""
+    required = [
+        "walk_forward_events",
+        "matched_peer_event_comparison",
+        "external_shock_attribution_ratio",
+        "attach_daily_final_evaluations",
+        "target = pd.Timestamp(start) + pd.to_timedelta",
+        'candidates = snapshot.loc[snapshot["code"].astype(str).ne(code)]',
+    ]
+    forbidden = ["yfinance", "requests.get", "fetch_yahoo", "get_eq_bars_daily", "jquants_api_client"]
+    missing = [term for term in required if term not in text]
+    forbidden_found = [term for term in forbidden if term in text.lower()]
+    dashboard_missing = [term for term in ["戦略検証", "Walk-Forward実績", "External Shock Attribution"] if term not in dashboard]
+    passed = module_path.exists() and not missing and not forbidden_found and not dashboard_missing
+    return CheckResult(
+        "strategy_validation_intelligence",
+        passed,
+        json.dumps({
+            "missing": missing,
+            "forbidden_network_terms": forbidden_found,
+            "dashboard_missing": dashboard_missing,
+        }, ensure_ascii=False),
+    )
+
+
 def check_dividend_screening(root: Path) -> CheckResult:
     jquants = (root / "src/value_dislocation/data/jquants.py").read_text(encoding="utf-8")
     features = (root / "src/value_dislocation/strategy/features.py").read_text(encoding="utf-8")
@@ -737,6 +768,7 @@ def run_checks(root: Path, include_pytest: bool = True) -> list[CheckResult]:
         check_history_stock_new_tab_navigation(root),
         check_candidate_stock_new_tab_navigation(root),
         check_large_data_navigation_performance(root),
+        check_strategy_validation_intelligence(root),
         check_dividend_screening(root),
         check_sbi_csv_bridge(root),
         check_translated_news_and_analyst_help(root),
