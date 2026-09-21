@@ -161,7 +161,21 @@ def financial_features(financials: pd.DataFrame, as_of: pd.Timestamp) -> pd.Data
         latest_sales = _num(latest_actual.get("sales"))
         latest_op = _num(latest_actual.get("operating_profit"))
         op_margin = latest_op / latest_sales if latest_sales and latest_sales > 0 else np.nan
+
+        op_values = pd.to_numeric(annual["operating_profit"], errors="coerce")
+        operating_profit_cagr_3y = (
+            _safe_cagr(float(op_values.iloc[0]), float(op_values.iloc[-1]), len(annual) - 1)
+            if len(annual) >= 2 and op_values.notna().all()
+            else np.nan
+        )
         ocf = pd.to_numeric(annual.get("operating_cf"), errors="coerce")
+        valid_conversion = op_values.notna() & ocf.notna() & (op_values > 0)
+        conversion_profit = float(op_values.loc[valid_conversion].sum()) if valid_conversion.any() else np.nan
+        cash_conversion_ratio_3y = (
+            float(ocf.loc[valid_conversion].sum()) / conversion_profit
+            if valid_conversion.any() and conversion_profit > 0
+            else np.nan
+        )
         ocf_positive_ratio = float((ocf > 0).mean()) if ocf.notna().any() else np.nan
         ocf_observed_years = int(ocf.notna().sum())
         ocf_positive_years = int((ocf > 0).sum()) if ocf.notna().any() else 0
@@ -172,6 +186,11 @@ def financial_features(financials: pd.DataFrame, as_of: pd.Timestamp) -> pd.Data
         cash = _num(latest_snapshot.get("cash"))
         debt = _num(latest_snapshot.get("interest_bearing_debt"))
         net_cash = cash - debt if not pd.isna(cash) and not pd.isna(debt) else np.nan
+        net_cash_to_assets = (
+            net_cash / total_assets
+            if not pd.isna(net_cash) and total_assets and total_assets > 0
+            else np.nan
+        )
 
         forecast_rows = all_rows.dropna(subset=["forecast_operating_profit"])
         forecast_row = forecast_rows.iloc[-1] if not forecast_rows.empty else latest_snapshot
@@ -181,6 +200,16 @@ def financial_features(financials: pd.DataFrame, as_of: pd.Timestamp) -> pd.Data
             if latest_op and latest_op > 0 and not pd.isna(forecast_op)
             else np.nan
         )
+        forecast_revision_rate = np.nan
+        forecast_revision_observed = False
+        revision_flag = str(forecast_row.get("is_revision", "")).strip().lower() in {
+            "true", "1", "yes"
+        }
+        if revision_flag and len(forecast_rows) >= 2:
+            previous_forecast = _num(forecast_rows.iloc[-2].get("forecast_operating_profit"))
+            if previous_forecast and previous_forecast > 0 and not pd.isna(forecast_op):
+                forecast_revision_rate = forecast_op / previous_forecast - 1
+                forecast_revision_observed = True
 
         eps = _num(latest_actual.get("eps"))
         bps = _num(latest_snapshot.get("book_value_per_share"))
@@ -223,17 +252,22 @@ def financial_features(financials: pd.DataFrame, as_of: pd.Timestamp) -> pd.Data
                 "financial_disclosure_date": latest_snapshot["disclosure_date"],
                 "latest_actual_period_end": latest_actual.get("period_end", latest_actual.get("fiscal_year")),
                 "sales_cagr_3y": sales_cagr_3y,
+                "operating_profit_cagr_3y": operating_profit_cagr_3y,
                 "operating_margin": op_margin,
                 "operating_profit_latest": latest_op,
+                "cash_conversion_ratio_3y": cash_conversion_ratio_3y,
                 "operating_cf_positive_ratio_3y": ocf_positive_ratio,
                 "operating_cf_observed_years": ocf_observed_years,
                 "operating_cf_positive_years": ocf_positive_years,
                 "equity_ratio": equity_ratio,
                 "net_cash": net_cash,
+                "net_cash_to_assets": net_cash_to_assets,
                 "eps": eps,
                 "book_value_per_share": bps,
                 "forecast_operating_profit": forecast_op,
                 "forecast_op_growth": forecast_op_growth,
+                "forecast_revision_rate": forecast_revision_rate,
+                "forecast_revision_observed": forecast_revision_observed,
                 "actual_annual_dividend_per_share": actual_dividend,
                 "forecast_annual_dividend_per_share": forecast_dividend,
                 "dividend_forecast_source": dividend_source,

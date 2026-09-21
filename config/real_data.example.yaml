@@ -74,6 +74,8 @@ screen:
   minimum_operating_margin: 0.00
   require_sales_history: false
   maximum_forecast_op_decline: -0.20
+  minimum_recovery_quality_score: 55
+  minimum_recovery_quality_components: 2
   minimum_drawdown_52w: -0.18
   minimum_relative_underperformance_6m: -0.08
   use_relative_underperformance_filter: true

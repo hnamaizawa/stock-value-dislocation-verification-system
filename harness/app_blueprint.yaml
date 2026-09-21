@@ -1,6 +1,6 @@
 schema_version: '1.0'
 blueprint_name: japanese-equity-value-dislocation-research
-blueprint_version: 0.6.61
+blueprint_version: 0.6.62
 canonical_project: stock-value-dislocation-verification-system
 purpose: Generate a local-first Japanese equity research application that retrieves
   actual market and financial data, searches listed companies, creates a quantitative
@@ -41,6 +41,7 @@ required_capabilities:
 - strict_quality_star_badge
 - reversal_confirmed_quality_star
 - legacy_vs_reversal_star_outcome_comparison
+- recovery_quality_structural_deterioration_guard
 - point_in_time_history_rule_learning
 - out_of_sample_rule_validation
 - bounded_reversible_runtime_rule_overlay
@@ -76,6 +77,7 @@ non_negotiable_invariants:
 - quality_star_must_not_override_negative_core_checks
 - quality_star_must_require_confirmed_short_term_reversal
 - legacy_star_eligibility_must_remain_comparable_after_rule_change
+- recovery_quality_must_be_missing_safe_and_not_fetch_market_data
 - learned_rule_changes_must_not_trigger_market_data_fetch
 - learned_rules_must_use_point_in_time_history
 - learned_rules_must_require_out_of_sample_validation

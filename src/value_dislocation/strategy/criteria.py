@@ -55,6 +55,12 @@ def _numeric_series(frame: pd.DataFrame, column: str, index: pd.Index) -> pd.Ser
     return pd.Series(values, index=index, dtype=float)
 
 
+def _scale_recovery_component(values: pd.Series, low: float, high: float) -> pd.Series:
+    numeric = pd.to_numeric(values, errors="coerce")
+    scaled = (numeric - low) / (high - low)
+    return scaled.clip(lower=0.0, upper=1.0)
+
+
 def _join_reasons(row: pd.Series, mapping: list[tuple[str, str]], expected: bool) -> str:
     values = [text for column, text in mapping if bool(row.get(column, False)) is expected]
     return " / ".join(values)
@@ -207,6 +213,42 @@ def apply_quantitative_criteria(
             | (scored["forecast_op_growth"] >= forecast_threshold)
         )
 
+    sector_text = scored.get("sector", pd.Series("", index=index)).astype(str).str.lower()
+    financial_sector = sector_text.str.contains(
+        r"銀行|保険|証券|金融|bank|insurance|securit|financial", regex=True, na=False
+    )
+    cash_conversion = _numeric_series(scored, "cash_conversion_ratio_3y", index).mask(financial_sector)
+    op_profit_cagr = _numeric_series(scored, "operating_profit_cagr_3y", index)
+    forecast_revision = _numeric_series(scored, "forecast_revision_rate", index)
+    net_cash_assets = _numeric_series(scored, "net_cash_to_assets", index)
+
+    recovery_components = {
+        "cash_conversion": (_scale_recovery_component(cash_conversion, 0.0, 1.10), 35.0),
+        "operating_profit_trend": (_scale_recovery_component(op_profit_cagr, -0.20, 0.10), 25.0),
+        "forecast_revision": (_scale_recovery_component(forecast_revision, -0.20, 0.10), 25.0),
+        "balance_sheet_buffer": (_scale_recovery_component(net_cash_assets, -0.30, 0.20), 15.0),
+    }
+    observed_weight = pd.Series(0.0, index=index)
+    weighted_score = pd.Series(0.0, index=index)
+    observed_components = pd.Series(0, index=index, dtype=int)
+    for component, (values, weight) in recovery_components.items():
+        available = values.notna()
+        scored[f"recovery_{component}_score"] = values * 100.0
+        observed_weight = observed_weight + available.astype(float) * weight
+        weighted_score = weighted_score + values.fillna(0.0) * weight
+        observed_components = observed_components + available.astype(int)
+    scored["recovery_quality_observed_components"] = observed_components
+    scored["recovery_quality_score"] = np.where(
+        observed_weight > 0, weighted_score / observed_weight * 100.0, np.nan
+    )
+    minimum_recovery_components = int(s.get("minimum_recovery_quality_components", 2))
+    minimum_recovery_score = float(s.get("minimum_recovery_quality_score", 55.0))
+    scored["pass_recovery_quality"] = (
+        (scored["recovery_quality_observed_components"] < minimum_recovery_components)
+        | pd.isna(scored["recovery_quality_score"])
+        | (scored["recovery_quality_score"] >= minimum_recovery_score)
+    )
+
     require_dividend = bool(s.get("require_dividend", False))
     dividend_available = scored.get("dividend_data_available", False)
     if not isinstance(dividend_available, pd.Series):
@@ -253,7 +295,7 @@ def apply_quantitative_criteria(
         s.get("minimum_daytrade_activity_score", 50.0)
     )
 
-    hard_columns = REQUIRED_CHECK_COLUMNS + ["pass_dividend_conditions"]
+    hard_columns = REQUIRED_CHECK_COLUMNS + ["pass_recovery_quality", "pass_dividend_conditions"]
     scored["hard_filter_pass"] = scored[hard_columns].all(axis=1)
     minimum_score = float(s.get("quantitative_min_score", 42))
     scored["pass_quantitative_score"] = scored["quantitative_score"] >= minimum_score
@@ -281,6 +323,7 @@ def apply_quantitative_criteria(
         ("pass_drawdown", "52週高値からの下落"),
         ("pass_relative_underperformance", "市場比較相対下落"),
         ("pass_forecast", "会社予想"),
+        ("pass_recovery_quality", "回復品質"),
         ("pass_dividend_conditions", "配当条件"),
         ("pass_quantitative_score", "定量スコア"),
         ("pass_daytrade_volatility", "60日ボラティリティ"),
@@ -383,8 +426,9 @@ def screening_funnel(table: pd.DataFrame) -> list[dict[str, int | str]]:
             ),
             ("価格下落条件", REQUIRED_CHECK_COLUMNS[:-1]),
             ("会社予想条件", REQUIRED_CHECK_COLUMNS),
-            ("配当条件", REQUIRED_CHECK_COLUMNS + ["pass_dividend_conditions"]),
-            ("定量スコア", REQUIRED_CHECK_COLUMNS + ["pass_dividend_conditions", "pass_quantitative_score"]),
+            ("回復品質", REQUIRED_CHECK_COLUMNS + ["pass_recovery_quality"]),
+            ("配当条件", REQUIRED_CHECK_COLUMNS + ["pass_recovery_quality", "pass_dividend_conditions"]),
+            ("定量スコア", REQUIRED_CHECK_COLUMNS + ["pass_recovery_quality", "pass_dividend_conditions", "pass_quantitative_score"]),
         ]
     result: list[dict[str, int | str]] = []
     for label, columns in stages:
