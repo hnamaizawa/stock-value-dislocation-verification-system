@@ -21,7 +21,7 @@ def test_public_decision_exports_import_from_decision_package():
         prepare_trend_chart_frame,
     )
 
-    assert value_dislocation.__version__ == "0.6.61"
+    assert value_dislocation.__version__ == "0.6.62"
     for fn in (
         build_buy_readiness, build_entry_price_guidance, build_intuitive_signal,
         build_price_trend_snapshot, build_split_entry_plan, build_trend_transition,

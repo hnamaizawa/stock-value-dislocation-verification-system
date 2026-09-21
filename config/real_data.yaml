@@ -76,6 +76,11 @@ screen:
   minimum_operating_cf_positive_ratio_3y: 0.6667
   minimum_sales_cagr_3y: -0.05
   minimum_operating_margin: 0.00
+  use_structural_deterioration_guard: true
+  minimum_cash_conversion_ratio: 0.70
+  minimum_operating_margin_change_3y: -0.03
+  minimum_forecast_revision_rate: -0.10
+  minimum_sector_relative_return_6m: -0.15
   require_sales_history: false
   maximum_forecast_op_decline: -0.20
   minimum_drawdown_52w: -0.18
