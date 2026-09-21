@@ -1,3 +1,10 @@
+## v0.6.63 walk-forward / matched controls / attribution
+
+- [x] point-in-time Walk-Forward検証を追加する。
+- [x] 類似非選択銘柄とのリターン比較と選択効果を追加する。
+- [x] 市場・業種・企業固有へ分解する外因説明率を追加する。
+- [x] 通常表示・条件変更では追加データ取得しない。
+
 ## v0.6.62 structural deterioration guards
 
 - [x] 利益現金化率（営業CF÷営業利益）を追加する。

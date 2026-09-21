@@ -162,3 +162,13 @@ def test_history_button_lists_keep_paging_compact_for_performance():
     assert 'default_size=default_size' in text
     assert 'compact_sizes=compact_sizes' in text
     assert 'with st.expander("現在ページの全列を表形式で確認"' in text
+
+
+def test_walk_forward_validation_is_explicit_and_local_only():
+    text = Path("dashboard.py").read_text(encoding="utf-8")
+    assert '"Walk-Forward検証"' in text
+    assert 'ローカル過去データでWalk-Forward検証を実行' in text
+    assert 'walk_forward_validation(' in text
+    validation = Path("src/value_dislocation/validation.py").read_text(encoding="utf-8")
+    assert "fetch_yahoo" not in validation
+    assert "jquants" not in validation.lower()

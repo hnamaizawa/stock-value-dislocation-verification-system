@@ -62,6 +62,12 @@ from value_dislocation.history import (
     star_validation_text_summary,
     write_star_outcomes,
 )
+from value_dislocation.validation import (
+    WalkForwardConfig,
+    attribution_outcome_summary,
+    walk_forward_summary,
+    walk_forward_validation,
+)
 from value_dislocation.hypothesis_invalidation import (
     METRIC_DEFINITIONS,
     evaluate_hypothesis_invalidation,
@@ -1078,11 +1084,12 @@ def _candidate_card(row: pd.Series) -> None:
         cols[6].metric("自己資本比率", _format_pct(row.get("equity_ratio")))
         cols[7].metric("予想営業利益", _format_pct(row.get("forecast_op_growth")))
         cols[8].metric("予想配当利回り", _format_pct(row.get("forecast_dividend_yield")))
-        quality_cols = st.columns(4)
+        quality_cols = st.columns(5)
         quality_cols[0].metric("利益現金化率", _format_pct(row.get("cash_conversion_ratio")))
         quality_cols[1].metric("営業利益率変化", _format_pct(row.get("operating_margin_change_3y")))
         quality_cols[2].metric("会社予想修正", _format_pct(row.get("forecast_revision_rate")))
         quality_cols[3].metric("同業中央値対比", _format_pct(row.get("sector_relative_return_6m")))
+        quality_cols[4].metric("外因説明率", _format_pct(row.get("external_shock_attribution")))
         st.write(f"通過理由: {row.get('pass_reasons', '')}")
         st.write(f"注意: {row.get('warning_reasons', '')}")
 
@@ -2027,13 +2034,92 @@ def _render_history_star_validation(evaluation: pd.DataFrame) -> None:
                 st.bar_chart(condition_chart.set_index("条件")[[avg_col]], width="stretch")
 
 
+def _render_history_walk_forward() -> None:
+    st.markdown("### Walk-Forward過去検証")
+    st.caption(
+        "現在の定量・構造悪化ルールを過去の時点へ再適用し、その後の実績を採点します。"
+        "選定には各時点までの価格・開示だけを使い、将来株価は選定完了後の結果評価にのみ使用します。"
+        "過去ニュースや人手の外的要因レビューは再現しないため、◎☆全体ではなく定量候補層の検証です。"
+    )
+    c1, c2, c3 = st.columns(3)
+    snapshots = c1.slider("再現時点数", 3, 12, 8, 1, key="wf_snapshots")
+    spacing = c2.slider("時点間隔（取引日）", 10, 40, 20, 5, key="wf_spacing")
+    controls = c3.slider("類似非選択銘柄数", 3, 10, 5, 1, key="wf_controls")
+    st.caption(
+        "類似銘柄は同業種を優先し、時価総額・52週下落率・60日ボラ・PER/PBRの業種比が近い"
+        "『その時点で選ばれなかった銘柄』から選びます。通常表示だけではデータ取得・再計算しません。"
+    )
+    if st.button("ローカル過去データでWalk-Forward検証を実行", key="run_walk_forward", type="primary"):
+        with st.spinner("過去時点を順番に再現し、類似非選択銘柄と比較しています…"):
+            data = load_curated_latest(ROOT)
+            cfg = load_config(REAL_CONFIG)
+            events = walk_forward_validation(
+                data["companies"], data["prices"], data["financials"], cfg,
+                settings=WalkForwardConfig(
+                    max_snapshots=int(snapshots),
+                    spacing_trading_days=int(spacing),
+                    controls_per_event=int(controls),
+                ),
+            )
+            st.session_state["walk_forward_validation_events"] = events
+        if events.empty:
+            st.warning("現在ローカルに保持している過去データでは、検証可能な定量候補イベントを作れませんでした。")
+        else:
+            st.success(f"Walk-Forward検証を完了しました。候補イベント {len(events):,} 件です。")
+
+    events = st.session_state.get("walk_forward_validation_events")
+    if not isinstance(events, pd.DataFrame) or events.empty:
+        st.info("『実行』を押すと、ローカル保存済みデータの範囲で過去検証を行います。")
+        return
+
+    summary = walk_forward_summary(events)
+    dates = pd.to_datetime(events.get("selection_date"), errors="coerce").dropna()
+    m1, m2, m3 = st.columns(3)
+    m1.metric("候補イベント", f"{len(events):,}件")
+    m2.metric("再現時点", f"{events.get('selection_date', pd.Series(dtype=str)).nunique():,}日")
+    m3.metric("検証期間", f"{dates.min().date()} ～ {dates.max().date()}" if not dates.empty else "-")
+
+    display = summary.copy()
+    for col in ["候補平均", "候補プラス率", "類似非選択平均", "選択効果", "選択効果プラス率"]:
+        if col in display.columns:
+            display[col] = pd.to_numeric(display[col], errors="coerce") * 100
+    st.markdown("#### 現在ルールのWalk-Forward成績")
+    st.dataframe(display, width="stretch", hide_index=True)
+    chart_cols = [c for c in ["候補平均", "類似非選択平均", "選択効果"] if c in display.columns]
+    if chart_cols:
+        st.bar_chart(display.set_index("期間")[chart_cols], width="stretch")
+    st.caption(
+        "選択効果 = 選ばれた候補の実績 − 類似していた非選択銘柄の平均実績。"
+        "市場全体が上昇しただけなのか、選択ロジック自体に上乗せ効果があったのかを確認します。"
+    )
+
+    attribution = attribution_outcome_summary(events, horizon_days=30)
+    if not attribution.empty:
+        shown = attribution.copy()
+        shown["平均リターン"] = pd.to_numeric(shown["平均リターン"], errors="coerce") * 100
+        shown["プラス率"] = pd.to_numeric(shown["プラス率"], errors="coerce") * 100
+        st.markdown("#### 外因説明率と30日後実績")
+        st.dataframe(shown, width="stretch", hide_index=True)
+        st.caption(
+            "外因説明率は6カ月下落を『市場＋業種』と『企業固有』に分解した記述統計です。"
+            "高いほど市場・業種の下落で説明できる割合が大きいことを示しますが、因果関係の証明ではありません。"
+        )
+
+    if st.checkbox("Walk-Forwardイベント詳細を表示", value=False, key="wf_details"):
+        details = events.copy()
+        pct_cols = [c for c in details.columns if c.startswith(("return_", "control_return_", "selection_edge_"))]
+        for col in pct_cols:
+            details[col] = pd.to_numeric(details[col], errors="coerce") * 100
+        st.dataframe(details.sort_values(["selection_date", "code"], ascending=[False, True]), width="stretch", hide_index=True)
+
+
 def render_history_and_validation() -> None:
     st.title("履歴・実績検証")
     st.caption("日次の定量分析と、統合候補一覧で保存された◎☆/◎/○/△/×評価を後から検索します。大量履歴でも反応が落ちにくいよう、必要なセクションだけ遅延読込みします。")
 
     section = st.segmented_control(
         "履歴表示",
-        ["日次分析履歴", "評価履歴", "◎☆実績検証"],
+        ["日次分析履歴", "評価履歴", "◎☆実績検証", "Walk-Forward検証"],
         default="日次分析履歴",
         selection_mode="single",
         label_visibility="collapsed",
@@ -2046,8 +2132,10 @@ def render_history_and_validation() -> None:
         _render_history_daily(evaluation_signature)
     elif section == "評価履歴":
         _render_history_evaluations(evaluation)
-    else:
+    elif section == "◎☆実績検証":
         _render_history_star_validation(evaluation)
+    else:
+        _render_history_walk_forward()
 
 def render_sbi_csv_import() -> None:
     bundle = _bundle_or_none()
