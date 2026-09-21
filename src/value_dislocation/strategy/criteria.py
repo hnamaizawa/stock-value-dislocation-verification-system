@@ -7,6 +7,7 @@ import numpy as np
 import pandas as pd
 
 from .features import financial_features, price_features
+from .attribution import add_external_shock_attribution
 from .scoring import add_valuation_features, score_candidates
 
 
@@ -180,6 +181,15 @@ def apply_quantitative_criteria(
         scored["benchmark_source"] = np.where(use_official, "official_topix", np.where(proxy_available.fillna(False), "topix_etf_proxy", "none"))
         proxy_labels = scored.get("topix_proxy_label", pd.Series("TOPIX連動ETF代理値", index=index)).fillna("TOPIX連動ETF代理値")
         scored["benchmark_label"] = np.where(use_official, "正式TOPIX", np.where(proxy_available.fillna(False), proxy_labels, "市場比較なし"))
+
+    scored["benchmark_return_6m"] = np.nan
+    official_mask = scored["benchmark_source"].astype(str).eq("official_topix")
+    proxy_mask = scored["benchmark_source"].astype(str).eq("topix_etf_proxy")
+    official_returns = _numeric_series(scored, "topix_return_6m", index)
+    proxy_returns = _numeric_series(scored, "topix_proxy_return_6m", index)
+    scored.loc[official_mask, "benchmark_return_6m"] = official_returns.loc[official_mask]
+    scored.loc[proxy_mask, "benchmark_return_6m"] = proxy_returns.loc[proxy_mask]
+    scored = add_external_shock_attribution(scored)
 
     relative_filter_enabled = bool(s.get("use_relative_underperformance_filter", True)) and benchmark_mode != "disabled"
     scored["relative_filter_enabled"] = relative_filter_enabled
@@ -375,6 +385,11 @@ def apply_quantitative_criteria(
             warnings.append("配当性向データなし")
         if not pd.isna(row.get("forecast_dividend_change_rate")) and float(row.get("forecast_dividend_change_rate")) < 0:
             warnings.append("減配予想")
+        attribution = pd.to_numeric(pd.Series([row.get("external_shock_attribution_score")]), errors="coerce").iloc[0]
+        if pd.notna(attribution):
+            warnings.append(f"外因説明率 {float(attribution):.0f}%（市場・業種価格要因の説明率。因果証明ではない）")
+        elif selection_strategy == "value_dislocation":
+            warnings.append("外因説明率は市場・業種比較データ不足")
         if selection_strategy == "value_dislocation":
             warnings.append("外的要因は未確認")
         else:
