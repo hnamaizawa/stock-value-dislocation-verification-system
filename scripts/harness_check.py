@@ -388,10 +388,19 @@ def check_walk_forward_invariants(root: Path) -> CheckResult:
     attribution_path = root / "src/value_dislocation/strategy/attribution.py"
     tests_path = root / "tests/test_walkforward_controls_attribution.py"
     docs_path = root / "docs/20_WALK_FORWARD_VALIDATION.md"
-    required_files = [validation_path, attribution_path, tests_path, docs_path]
+    cache_path = root / "src/value_dislocation/walkforward_cache.py"
+    cache_tests_path = root / "tests/test_walkforward_cache.py"
+    dashboard_path = root / "dashboard.py"
+    required_files = [
+        validation_path, attribution_path, tests_path, docs_path,
+        cache_path, cache_tests_path, dashboard_path,
+    ]
     missing_files = [str(path.relative_to(root)) for path in required_files if not path.exists()]
     validation = validation_path.read_text(encoding="utf-8") if validation_path.exists() else ""
     tests = tests_path.read_text(encoding="utf-8") if tests_path.exists() else ""
+    cache = cache_path.read_text(encoding="utf-8") if cache_path.exists() else ""
+    cache_tests = cache_tests_path.read_text(encoding="utf-8") if cache_tests_path.exists() else ""
+    dashboard = dashboard_path.read_text(encoding="utf-8") if dashboard_path.exists() else ""
     required_validation = [
         "_point_in_time_inputs",
         'future = g.loc[g["date"].dt.normalize() > anchor_day]',
@@ -400,6 +409,11 @@ def check_walk_forward_invariants(root: Path) -> CheckResult:
         "missing_master_code_count",
         "master_coverage_ratio",
         "survivorship_bias_warning",
+        "_price_index",
+        "_forward_return_indexed",
+        "load_feature_cache",
+        "save_feature_cache",
+        "progress",
     ]
     required_tests = [
         "test_walk_forward_filters_future_inputs_before_selection",
@@ -407,11 +421,36 @@ def check_walk_forward_invariants(root: Path) -> CheckResult:
         "test_matched_controls_backfills_same_market_after_sector_priority",
         "test_walk_forward_module_has_no_market_fetch_dependency",
     ]
+    required_cache = [
+        "walk_forward_cache_key",
+        "load_walk_forward_result",
+        "save_walk_forward_result",
+        "data_signature",
+        "config",
+        "app_version",
+    ]
+    required_cache_tests = [
+        "test_indexed_forward_return_matches_reference",
+        "test_result_cache_round_trip_and_key_invalidation",
+        "test_walk_forward_reuses_feature_cache_and_reports_progress",
+    ]
+    required_dashboard = [
+        '"簡易"', '"標準"', '"詳細"',
+        "st.progress", "walk_forward_cache_key",
+        "load_walk_forward_result", "保存済み結果を使わず再計算",
+    ]
     forbidden_fetch_terms = ["fetch_and_curate_jquants", "import yfinance", "from yfinance"]
     missing_validation = [term for term in required_validation if term not in validation]
     missing_tests = [term for term in required_tests if term not in tests]
+    missing_cache = [term for term in required_cache if term not in cache]
+    missing_cache_tests = [term for term in required_cache_tests if term not in cache_tests]
+    missing_dashboard = [term for term in required_dashboard if term not in dashboard]
     forbidden_found = [term for term in forbidden_fetch_terms if term in validation]
-    passed = not missing_files and not missing_validation and not missing_tests and not forbidden_found
+    passed = (
+        not missing_files and not missing_validation and not missing_tests
+        and not missing_cache and not missing_cache_tests
+        and not missing_dashboard and not forbidden_found
+    )
     return CheckResult(
         "walk_forward_invariants",
         passed,
@@ -419,6 +458,9 @@ def check_walk_forward_invariants(root: Path) -> CheckResult:
             "missing_files": missing_files,
             "missing_validation": missing_validation,
             "missing_tests": missing_tests,
+            "missing_cache": missing_cache,
+            "missing_cache_tests": missing_cache_tests,
+            "missing_dashboard": missing_dashboard,
             "forbidden_fetch_terms": forbidden_found,
         }, ensure_ascii=False),
     )
@@ -445,6 +487,9 @@ def check_blueprint(root: Path) -> CheckResult:
         "walk_forward_validation_must_not_trigger_market_data_fetch",
         "walk_forward_horizons_must_use_trading_sessions",
         "walk_forward_must_report_survivorship_coverage",
+        "walk_forward_cache_must_be_invalidated_by_data_config_and_version",
+        "walk_forward_cached_features_must_remain_point_in_time",
+        "walk_forward_progress_must_not_trigger_market_data_fetch",
     }
     invariants = set(blueprint.get("non_negotiable_invariants", []))
     required_files = blueprint.get("required_files", [])
