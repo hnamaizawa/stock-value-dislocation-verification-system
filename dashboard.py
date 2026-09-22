@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import html
 import json
 import os
@@ -62,6 +63,12 @@ from value_dislocation.history import (
     star_validation_text_summary,
     write_star_outcomes,
 )
+from value_dislocation import __version__
+from value_dislocation.walkforward_cache import (
+    load_walk_forward_result,
+    save_walk_forward_result,
+    walk_forward_cache_key,
+)
 from value_dislocation.validation import (
     WalkForwardConfig,
     attribution_outcome_summary,
@@ -103,6 +110,7 @@ PROFILE_DIR = ROOT / "config" / "user_profiles"
 EXTERNAL_REVIEW_DIR = ROOT / "config" / "external_event_reviews"
 UI_PREFERENCES_PATH = ROOT / "config" / "ui_preferences.json"
 DEMO_OUTPUT = ROOT / "outputs"
+WALK_FORWARD_CACHE = REAL_OUTPUT / "walk_forward_cache"
 STOCK_DETAIL_URL_PATH = "render_stock_search"
 
 st.set_page_config(page_title="Stock Value Dislocation Verification System", layout="wide")
@@ -2034,6 +2042,26 @@ def _render_history_star_validation(evaluation: pd.DataFrame) -> None:
                 st.bar_chart(condition_chart.set_index("条件")[[avg_col]], width="stretch")
 
 
+def _walk_forward_data_signature() -> str:
+    paths = [
+        ROOT / "data/curated/latest/companies.parquet",
+        ROOT / "data/curated/latest/companies.csv",
+        ROOT / "data/curated/latest/prices.parquet",
+        ROOT / "data/curated/latest/prices.csv",
+        ROOT / "data/curated/latest/financials.parquet",
+        ROOT / "data/curated/latest/financials.csv",
+        ROOT / "data/curated/latest/manifest.json",
+    ]
+    state = []
+    for path in paths:
+        if path.exists():
+            stat = path.stat()
+            state.append((str(path.relative_to(ROOT)), int(stat.st_size), int(stat.st_mtime_ns)))
+    return hashlib.sha256(
+        json.dumps(state, ensure_ascii=False, sort_keys=True).encode("utf-8")
+    ).hexdigest()
+
+
 def _render_history_walk_forward() -> None:
     st.markdown("### Walk-Forward過去検証")
     st.caption(
@@ -2046,38 +2074,128 @@ def _render_history_walk_forward() -> None:
         "生存者バイアス注意: 現在のcurated会社マスターに存在しない過去銘柄は復元できません。"
         "結果には会社マスターのカバレッジを記録し、欠落を可視化します。完全な除去には過去時点の銘柄マスターが必要です。"
     )
-    c1, c2, c3 = st.columns(3)
-    snapshots = c1.slider("再現時点数", 3, 12, 8, 1, key="wf_snapshots")
-    spacing = c2.slider("時点間隔（取引日）", 10, 40, 20, 5, key="wf_spacing")
-    controls = c3.slider("類似非選択銘柄数", 3, 10, 5, 1, key="wf_controls")
+    modes = {
+        "簡易": {
+            "description": "3時点・10/30/90取引日。条件を素早く確認します。",
+            "snapshots": 3, "spacing": 40, "controls": 3, "horizons": (10, 30, 90),
+        },
+        "標準": {
+            "description": "8時点・全6期間。通常の検証に推奨します。",
+            "snapshots": 8, "spacing": 20, "controls": 5,
+            "horizons": tuple(STAR_OUTCOME_HORIZONS),
+        },
+        "詳細": {
+            "description": "12時点・全6期間。時間をかけて確認します。",
+            "snapshots": 12, "spacing": 10, "controls": 5,
+            "horizons": tuple(STAR_OUTCOME_HORIZONS),
+        },
+    }
+    mode_name = st.segmented_control(
+        "検証モード", list(modes), default="標準", key="wf_mode"
+    )
+    mode = modes.get(mode_name or "標準", modes["標準"])
+    st.caption(mode["description"])
+    advanced = st.checkbox("詳細設定を変更", value=False, key="wf_advanced")
+    if advanced:
+        c1, c2, c3 = st.columns(3)
+        snapshots = c1.slider("再現時点数", 3, 12, int(mode["snapshots"]), 1, key="wf_snapshots")
+        spacing = c2.slider("時点間隔（取引日）", 10, 40, int(mode["spacing"]), 5, key="wf_spacing")
+        controls = c3.slider("類似非選択銘柄数", 3, 10, int(mode["controls"]), 1, key="wf_controls")
+        horizon_values = st.multiselect(
+            "評価期間（取引日）",
+            list(STAR_OUTCOME_HORIZONS),
+            default=list(mode["horizons"]),
+            key="wf_horizons",
+        )
+        horizons = tuple(sorted(int(value) for value in horizon_values))
+    else:
+        snapshots = int(mode["snapshots"])
+        spacing = int(mode["spacing"])
+        controls = int(mode["controls"])
+        horizons = tuple(int(value) for value in mode["horizons"])
+
     st.caption(
         "類似銘柄は同業種を優先し、時価総額・52週下落率・60日ボラ・PER/PBRの業種比が近い"
         "『その時点で選ばれなかった銘柄』から選びます。通常表示だけではデータ取得・再計算しません。"
     )
-    if st.button("ローカル過去データでWalk-Forward検証を実行", key="run_walk_forward", type="primary"):
-        with st.spinner("過去時点を順番に再現し、類似非選択銘柄と比較しています…"):
-            data = load_curated_latest(ROOT)
-            cfg = load_config(REAL_CONFIG)
-            events = walk_forward_validation(
-                data["companies"], data["prices"], data["financials"], cfg,
-                settings=WalkForwardConfig(
-                    max_snapshots=int(snapshots),
-                    spacing_trading_days=int(spacing),
-                    controls_per_event=int(controls),
-                ),
-            )
+    force_recalculate = st.checkbox(
+        "保存済み結果を使わず再計算", value=False, key="wf_force_recalculate"
+    )
+    if st.button(
+        "ローカル過去データでWalk-Forward検証を実行",
+        key="run_walk_forward",
+        type="primary",
+        disabled=not horizons,
+    ):
+        data = load_curated_latest(ROOT)
+        cfg = load_config(REAL_CONFIG)
+        settings = WalkForwardConfig(
+            max_snapshots=int(snapshots),
+            spacing_trading_days=int(spacing),
+            controls_per_event=int(controls),
+        )
+        data_signature = _walk_forward_data_signature()
+        cache_key = walk_forward_cache_key(
+            data_signature=data_signature,
+            config=cfg,
+            settings=settings,
+            horizons=horizons,
+            app_version=__version__,
+        )
+        events = None if force_recalculate else load_walk_forward_result(
+            WALK_FORWARD_CACHE, cache_key
+        )
+        if events is not None:
             st.session_state["walk_forward_validation_events"] = events
-        if events.empty:
-            st.warning("現在ローカルに保持している過去データでは、検証可能な定量候補イベントを作れませんでした。")
+            st.session_state["walk_forward_validation_horizons"] = horizons
+            st.success(
+                f"保存済みの同一条件の結果を読み込みました。候補イベント {len(events):,} 件です。"
+            )
         else:
-            st.success(f"Walk-Forward検証を完了しました。候補イベント {len(events):,} 件です。")
+            progress_bar = st.progress(0.0)
+            progress_text = st.empty()
+
+            def update_walk_forward_progress(info: dict) -> None:
+                current = int(info.get("snapshot", 0))
+                total = max(int(info.get("total_snapshots", 1)), 1)
+                as_of = info.get("as_of")
+                as_of_text = pd.Timestamp(as_of).date().isoformat() if as_of is not None else "-"
+                progress_bar.progress(min(current / total, 1.0))
+                progress_text.caption(
+                    f"再現時点 {current}/{total}・基準日 {as_of_text}・"
+                    f"{info.get('message', '処理中')}"
+                )
+
+            with st.spinner("保存済みローカルデータで過去検証を実行しています…"):
+                events = walk_forward_validation(
+                    data["companies"], data["prices"], data["financials"], cfg,
+                    settings=settings,
+                    horizons=horizons,
+                    cache_dir=WALK_FORWARD_CACHE,
+                    data_signature=f"{data_signature}:{__version__}",
+                    progress=update_walk_forward_progress,
+                )
+                save_walk_forward_result(WALK_FORWARD_CACHE, cache_key, events)
+                st.session_state["walk_forward_validation_events"] = events
+                st.session_state["walk_forward_validation_horizons"] = horizons
+            progress_bar.progress(1.0)
+            progress_text.caption("Walk-Forward過去検証が完了しました。")
+            if events.empty:
+                st.warning("現在ローカルに保持している過去データでは、検証可能な定量候補イベントを作れませんでした。")
+            else:
+                st.success(f"Walk-Forward検証を完了しました。候補イベント {len(events):,} 件です。")
 
     events = st.session_state.get("walk_forward_validation_events")
     if not isinstance(events, pd.DataFrame) or events.empty:
         st.info("『実行』を押すと、ローカル保存済みデータの範囲で過去検証を行います。")
         return
 
-    summary = walk_forward_summary(events)
+    result_horizons = tuple(
+        int(value) for value in st.session_state.get(
+            "walk_forward_validation_horizons", tuple(STAR_OUTCOME_HORIZONS)
+        )
+    )
+    summary = walk_forward_summary(events, horizons=result_horizons)
     dates = pd.to_datetime(events.get("selection_date"), errors="coerce").dropna()
     m1, m2, m3, m4 = st.columns(4)
     m1.metric("候補イベント", f"{len(events):,}件")

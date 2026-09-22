@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Iterable
+from pathlib import Path
+from typing import Callable, Iterable
 
 import numpy as np
 import pandas as pd
@@ -9,6 +10,7 @@ import pandas as pd
 from .history import STAR_OUTCOME_HORIZONS
 from .strategy.attribution import add_external_shock_attribution
 from .strategy.criteria import apply_quantitative_criteria, prepare_quantitative_universe
+from .walkforward_cache import load_feature_cache, save_feature_cache
 
 
 @dataclass(frozen=True)
@@ -71,6 +73,40 @@ def _price_groups(prices: pd.DataFrame) -> dict[str, pd.DataFrame]:
     p["close"] = pd.to_numeric(p["close"], errors="coerce")
     p = p.dropna(subset=["date", "close"]).sort_values(["code", "date"])
     return {code: g.reset_index(drop=True) for code, g in p.groupby("code", sort=False)}
+
+
+def _price_index(prices: pd.DataFrame) -> dict[str, tuple[np.ndarray, np.ndarray]]:
+    """Build one immutable binary-search index for every security."""
+    groups = _price_groups(prices)
+    return {
+        code: (
+            group["date"].to_numpy(dtype="datetime64[ns]"),
+            group["close"].to_numpy(dtype=float),
+        )
+        for code, group in groups.items()
+    }
+
+
+def _forward_return_indexed(
+    index: dict[str, tuple[np.ndarray, np.ndarray]],
+    code: str,
+    anchor: pd.Timestamp,
+    entry_price: float,
+    horizon_days: int,
+) -> tuple[float | None, int | None]:
+    values = index.get(str(code))
+    if values is None or not np.isfinite(entry_price) or entry_price <= 0:
+        return None, None
+    dates, closes = values
+    anchor_day = np.datetime64(pd.Timestamp(anchor).tz_localize(None).normalize(), "ns")
+    position = int(np.searchsorted(dates, anchor_day, side="right")) + int(horizon_days) - 1
+    if position < 0 or position >= len(dates):
+        return None, None
+    price = float(closes[position])
+    actual_days = int(
+        (pd.Timestamp(dates[position]).normalize() - pd.Timestamp(anchor).normalize()).days
+    )
+    return price / float(entry_price) - 1.0, actual_days
 
 
 def _forward_return(
@@ -217,6 +253,9 @@ def walk_forward_validation(
     *,
     settings: WalkForwardConfig | None = None,
     horizons: Iterable[int] = STAR_OUTCOME_HORIZONS,
+    cache_dir: Path | None = None,
+    data_signature: str = "",
+    progress: Callable[[dict], None] | None = None,
 ) -> pd.DataFrame:
     """Replay today's quantitative rule at historical as-of dates without look-ahead.
 
@@ -226,6 +265,7 @@ def walk_forward_validation(
     news; it validates the quantitative + structural screen only.
     """
     settings = settings or WalkForwardConfig()
+    horizons = tuple(int(value) for value in horizons)
     dates = _walk_forward_dates(
         prices,
         max_snapshots=settings.max_snapshots,
@@ -234,15 +274,38 @@ def walk_forward_validation(
     )
     if not dates:
         return pd.DataFrame()
-    groups = _price_groups(prices)
+    price_index = _price_index(prices)
     events: list[dict] = []
-    for as_of in dates:
+    total_dates = len(dates)
+    for snapshot_number, as_of in enumerate(dates, start=1):
+        if progress is not None:
+            progress({
+                "stage": "features",
+                "snapshot": snapshot_number,
+                "total_snapshots": total_dates,
+                "as_of": pd.Timestamp(as_of),
+                "message": "過去時点の特徴量を準備しています",
+            })
         point_companies, point_prices, point_financials, cohort_audit = _point_in_time_inputs(
             companies, prices, financials, as_of
         )
-        prepared = prepare_quantitative_universe(
-            point_companies, point_prices, point_financials, as_of
-        )
+        prepared = None
+        if cache_dir is not None and data_signature:
+            prepared = load_feature_cache(cache_dir, data_signature, as_of)
+        if prepared is None:
+            prepared = prepare_quantitative_universe(
+                point_companies, point_prices, point_financials, as_of
+            )
+            if cache_dir is not None and data_signature:
+                save_feature_cache(cache_dir, data_signature, as_of, prepared)
+        elif progress is not None:
+            progress({
+                "stage": "feature_cache",
+                "snapshot": snapshot_number,
+                "total_snapshots": total_dates,
+                "as_of": pd.Timestamp(as_of),
+                "message": "保存済みの過去特徴量を再利用しています",
+            })
         evaluated = apply_quantitative_criteria(prepared, config)
         evaluated = with_attribution(evaluated)
         selected = evaluated.loc[evaluated.get("selected_for_review", False).fillna(False).astype(bool)].copy()
@@ -264,7 +327,7 @@ def walk_forward_validation(
                 **cohort_audit,
             }
             for horizon in horizons:
-                selected_return, actual_days = _forward_return(groups, event["code"], as_of, entry, int(horizon))
+                selected_return, actual_days = _forward_return_indexed(price_index, event["code"], as_of, entry, int(horizon))
                 event[f"return_{horizon}d"] = selected_return
                 event[f"actual_days_{horizon}d"] = actual_days
                 control_returns: list[float] = []
@@ -272,7 +335,7 @@ def walk_forward_validation(
                     c_entry = pd.to_numeric(pd.Series([control.get("close")]), errors="coerce").iloc[0]
                     if pd.isna(c_entry):
                         continue
-                    c_return, _ = _forward_return(groups, str(control.get("code", "")), as_of, float(c_entry), int(horizon))
+                    c_return, _ = _forward_return_indexed(price_index, str(control.get("code", "")), as_of, float(c_entry), int(horizon))
                     if c_return is not None:
                         control_returns.append(float(c_return))
                 c_mean = float(np.mean(control_returns)) if control_returns else None
@@ -282,6 +345,15 @@ def walk_forward_validation(
                 )
                 event[f"control_completed_{horizon}d"] = len(control_returns)
             events.append(event)
+        if progress is not None:
+            progress({
+                "stage": "completed",
+                "snapshot": snapshot_number,
+                "total_snapshots": total_dates,
+                "as_of": pd.Timestamp(as_of),
+                "selected_count": int(len(selected)),
+                "message": "再現時点の評価が完了しました",
+            })
     return pd.DataFrame(events)
 
 

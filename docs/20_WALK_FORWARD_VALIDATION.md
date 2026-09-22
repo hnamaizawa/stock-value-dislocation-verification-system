@@ -57,3 +57,26 @@ cannot claim to eliminate it without historical security-master snapshots.
 
 A horizon of N days means the Nth available trading session strictly after the selection
 date. `actual_days_Nd` remains the observed calendar-day distance for audit purposes.
+
+
+## v0.6.65 performance model
+
+Walk-Forward remains local-only and point-in-time, but avoids repeating equivalent work:
+
+- A per-security sorted NumPy date/close index resolves forward returns with binary search.
+- Point-in-time quantitative feature tables are persisted by curated-data signature and replay date.
+- Complete event results are persisted by curated-data signature, screening configuration,
+  Walk-Forward settings, horizons, cache schema, and application version.
+- Cache writes use a temporary parquet followed by an atomic replace.
+- A changed data file, condition, mode, horizon, setting, or application version produces a
+  different cache key; stale results are not silently reused.
+- Progress reports the current replay number and date without triggering J-Quants or Yahoo access.
+
+The dashboard provides three modes:
+
+- **簡易**: 3 snapshots; 10/30/90 trading sessions.
+- **標準**: 8 snapshots; all six horizons.
+- **詳細**: 12 snapshots; all six horizons.
+
+Users can override the settings or explicitly bypass the complete-result cache. Feature caches
+may still be reused because they contain threshold-independent point-in-time metrics.
