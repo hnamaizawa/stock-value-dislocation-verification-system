@@ -2040,6 +2040,11 @@ def _render_history_walk_forward() -> None:
         "現在の定量・構造悪化ルールを過去の時点へ再適用し、その後の実績を採点します。"
         "選定には各時点までの価格・開示だけを使い、将来株価は選定完了後の結果評価にのみ使用します。"
         "過去ニュースや人手の外的要因レビューは再現しないため、◎☆全体ではなく定量候補層の検証です。"
+        "10/20/30/60/90/180日は暦日ではなく、選定日の後に観測できた取引セッション数です。"
+    )
+    st.warning(
+        "生存者バイアス注意: 現在のcurated会社マスターに存在しない過去銘柄は復元できません。"
+        "結果には会社マスターのカバレッジを記録し、欠落を可視化します。完全な除去には過去時点の銘柄マスターが必要です。"
     )
     c1, c2, c3 = st.columns(3)
     snapshots = c1.slider("再現時点数", 3, 12, 8, 1, key="wf_snapshots")
@@ -2074,10 +2079,18 @@ def _render_history_walk_forward() -> None:
 
     summary = walk_forward_summary(events)
     dates = pd.to_datetime(events.get("selection_date"), errors="coerce").dropna()
-    m1, m2, m3 = st.columns(3)
+    m1, m2, m3, m4 = st.columns(4)
     m1.metric("候補イベント", f"{len(events):,}件")
     m2.metric("再現時点", f"{events.get('selection_date', pd.Series(dtype=str)).nunique():,}日")
     m3.metric("検証期間", f"{dates.min().date()} ～ {dates.max().date()}" if not dates.empty else "-")
+    coverage = pd.to_numeric(events.get("master_coverage_ratio"), errors="coerce").dropna()
+    m4.metric("会社マスター最低カバレッジ", f"{coverage.min() * 100:.1f}%" if not coverage.empty else "-")
+    missing_master = pd.to_numeric(events.get("missing_master_code_count"), errors="coerce").fillna(0)
+    if missing_master.gt(0).any():
+        st.warning(
+            f"再現時点の観測可能銘柄のうち、最大 {int(missing_master.max()):,} 銘柄が"
+            "現在の会社マスターに存在せず、選定対象に含められませんでした。"
+        )
 
     display = summary.copy()
     for col in ["候補平均", "候補プラス率", "類似非選択平均", "選択効果", "選択効果プラス率"]:
@@ -2098,7 +2111,7 @@ def _render_history_walk_forward() -> None:
         shown = attribution.copy()
         shown["平均リターン"] = pd.to_numeric(shown["平均リターン"], errors="coerce") * 100
         shown["プラス率"] = pd.to_numeric(shown["プラス率"], errors="coerce") * 100
-        st.markdown("#### 外因説明率と30日後実績")
+        st.markdown("#### 外因説明率と30取引日後実績")
         st.dataframe(shown, width="stretch", hide_index=True)
         st.caption(
             "外因説明率は6カ月下落を『市場＋業種』と『企業固有』に分解した記述統計です。"

@@ -83,11 +83,14 @@ def _forward_return(
     g = groups.get(str(code))
     if g is None or g.empty or not np.isfinite(entry_price) or entry_price <= 0:
         return None, None
-    target = pd.Timestamp(anchor).tz_localize(None).normalize() + pd.to_timedelta(int(horizon_days), unit="D")
-    future = g.loc[g["date"].dt.normalize() >= target]
-    if future.empty:
+    anchor_day = pd.Timestamp(anchor).tz_localize(None).normalize()
+    # Horizons are trading sessions, not calendar days.  Use strictly later
+    # observations so "10d" means the tenth available session after selection.
+    future = g.loc[g["date"].dt.normalize() > anchor_day]
+    position = int(horizon_days) - 1
+    if position < 0 or len(future) <= position:
         return None, None
-    row = future.iloc[0]
+    row = future.iloc[position]
     price = float(row["close"])
     actual_days = int((pd.Timestamp(row["date"]).normalize() - pd.Timestamp(anchor).normalize()).days)
     return price / float(entry_price) - 1.0, actual_days
@@ -124,27 +127,87 @@ def _control_distance(pool: pd.DataFrame, target: pd.Series) -> pd.Series:
 
 
 def matched_controls(universe: pd.DataFrame, target: pd.Series, *, count: int = 5) -> pd.DataFrame:
+    """Choose non-selected controls with deterministic sector-first backfilling."""
     if universe.empty:
         return pd.DataFrame()
+    requested = max(int(count), 1)
     target_code = str(target.get("code", ""))
     pool = universe.loc[universe.get("code", pd.Series("", index=universe.index)).astype(str).ne(target_code)].copy()
     if "selected_for_review" in pool.columns:
         pool = pool.loc[~pool["selected_for_review"].fillna(False).astype(bool)].copy()
-    sector = str(target.get("sector", ""))
-    same_sector = pool.loc[pool.get("sector", pd.Series("", index=pool.index)).astype(str).eq(sector)].copy()
-    if len(same_sector) >= count:
-        pool = same_sector
-    else:
-        market = str(target.get("market", ""))
-        same_market = pool.loc[pool.get("market", pd.Series("", index=pool.index)).astype(str).eq(market)].copy()
-        if len(same_market) >= count:
-            pool = same_market
     if pool.empty:
         return pool
-    pool["match_distance"] = _control_distance(pool, target)
-    pool = pool.dropna(subset=["match_distance"]).sort_values(["match_distance", "code"], kind="stable")
-    return pool.head(max(int(count), 1)).copy()
 
+    pool["match_distance"] = _control_distance(pool, target)
+    pool = pool.dropna(subset=["match_distance"]).copy()
+    if pool.empty:
+        return pool
+
+    sector = str(target.get("sector", ""))
+    market = str(target.get("market", ""))
+    same_sector = pool.loc[pool.get("sector", pd.Series("", index=pool.index)).astype(str).eq(sector)]
+    same_market = pool.loc[
+        pool.get("market", pd.Series("", index=pool.index)).astype(str).eq(market)
+        & ~pool.index.isin(same_sector.index)
+    ]
+    remainder = pool.loc[~pool.index.isin(same_sector.index.union(same_market.index))]
+
+    ranked_parts = [
+        part.sort_values(["match_distance", "code"], kind="stable")
+        for part in (same_sector, same_market, remainder)
+        if not part.empty
+    ]
+    if not ranked_parts:
+        return pool.head(0)
+    return pd.concat(ranked_parts).head(requested).copy()
+
+
+def _point_in_time_inputs(
+    companies: pd.DataFrame,
+    prices: pd.DataFrame,
+    financials: pd.DataFrame,
+    as_of: pd.Timestamp,
+) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, dict[str, int | float | str]]:
+    """Build an auditable as-of cohort before feature preparation.
+
+    Current curated company masters cannot resurrect securities omitted by the
+    upstream snapshot.  We therefore expose coverage instead of silently
+    claiming a survivorship-bias-free universe.
+    """
+    cutoff = pd.Timestamp(as_of).tz_localize(None).normalize()
+    p = prices.copy()
+    p["code"] = p["code"].astype(str)
+    p["date"] = pd.to_datetime(p["date"], errors="coerce").dt.tz_localize(None)
+    p = p.loc[p["date"].notna() & (p["date"].dt.normalize() <= cutoff)].copy()
+
+    f = financials.copy()
+    f["code"] = f["code"].astype(str)
+    f["disclosure_date"] = pd.to_datetime(f["disclosure_date"], errors="coerce").dt.tz_localize(None)
+    f = f.loc[f["disclosure_date"].notna() & (f["disclosure_date"].dt.normalize() <= cutoff)].copy()
+
+    c = companies.copy()
+    c["code"] = c["code"].astype(str)
+    price_codes = set(p["code"])
+    financial_codes = set(f["code"])
+    observable_codes = price_codes & financial_codes
+    master_codes = set(c["code"])
+    missing_master = observable_codes - master_codes
+    eligible_codes = observable_codes & master_codes
+    c = c.loc[c["code"].isin(eligible_codes)].copy()
+
+    audit: dict[str, int | float | str] = {
+        "universe_source": "current_master_with_point_in_time_price_and_financial_eligibility",
+        "observable_code_count": len(observable_codes),
+        "eligible_master_code_count": len(eligible_codes),
+        "missing_master_code_count": len(missing_master),
+        "master_coverage_ratio": (
+            len(eligible_codes) / len(observable_codes) if observable_codes else 1.0
+        ),
+        "survivorship_bias_warning": (
+            "Historical listings absent from the curated company master cannot be reconstructed."
+        ),
+    }
+    return c, p, f, audit
 
 def walk_forward_validation(
     companies: pd.DataFrame,
@@ -174,7 +237,12 @@ def walk_forward_validation(
     groups = _price_groups(prices)
     events: list[dict] = []
     for as_of in dates:
-        prepared = prepare_quantitative_universe(companies, prices, financials, as_of)
+        point_companies, point_prices, point_financials, cohort_audit = _point_in_time_inputs(
+            companies, prices, financials, as_of
+        )
+        prepared = prepare_quantitative_universe(
+            point_companies, point_prices, point_financials, as_of
+        )
         evaluated = apply_quantitative_criteria(prepared, config)
         evaluated = with_attribution(evaluated)
         selected = evaluated.loc[evaluated.get("selected_for_review", False).fillna(False).astype(bool)].copy()
@@ -193,6 +261,7 @@ def walk_forward_validation(
                 "company_specific_component_6m": row.get("company_specific_component_6m"),
                 "control_codes": ",".join(controls.get("code", pd.Series(dtype=str)).astype(str).tolist()),
                 "control_count": int(len(controls)),
+                **cohort_audit,
             }
             for horizon in horizons:
                 selected_return, actual_days = _forward_return(groups, event["code"], as_of, entry, int(horizon))
@@ -224,7 +293,7 @@ def walk_forward_summary(events: pd.DataFrame, horizons: Iterable[int] = STAR_OU
         edge = _numeric(events, f"selection_edge_{horizon}d").dropna()
         rows.append(
             {
-                "期間": f"{int(horizon)}日",
+                "期間": f"{int(horizon)}取引日",
                 "確定件数": int(len(selected)),
                 "候補平均": float(selected.mean()) if len(selected) else None,
                 "候補プラス率": float((selected > 0).mean()) if len(selected) else None,

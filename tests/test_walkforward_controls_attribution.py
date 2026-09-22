@@ -4,7 +4,14 @@ import numpy as np
 import pandas as pd
 
 from value_dislocation.strategy.attribution import add_external_shock_attribution
-from value_dislocation.validation import matched_controls, walk_forward_summary
+from value_dislocation import validation
+from value_dislocation.validation import (
+    WalkForwardConfig,
+    _forward_return,
+    matched_controls,
+    walk_forward_summary,
+    walk_forward_validation,
+)
 
 
 def test_external_shock_attribution_decomposes_decline():
@@ -52,3 +59,73 @@ def test_walk_forward_summary_reports_selection_edge():
     assert np.isclose(row["類似非選択平均"], -0.015)
     assert np.isclose(row["選択効果"], 0.055)
     assert np.isclose(row["選択効果プラス率"], 1.0)
+
+
+def test_matched_controls_backfills_same_market_after_sector_priority():
+    universe = pd.DataFrame([
+        {"code": "A", "sector": "Tech", "market": "Prime", "selected_for_review": True, "market_cap": 100, "drawdown_52w": -0.2, "volatility_60d": 0.3, "per_vs_sector": 1.0, "pbr_vs_sector": 1.0},
+        {"code": "B", "sector": "Tech", "market": "Prime", "selected_for_review": False, "market_cap": 500, "drawdown_52w": -0.4, "volatility_60d": 0.5, "per_vs_sector": 1.5, "pbr_vs_sector": 1.5},
+        {"code": "C", "sector": "Retail", "market": "Prime", "selected_for_review": False, "market_cap": 101, "drawdown_52w": -0.2, "volatility_60d": 0.3, "per_vs_sector": 1.0, "pbr_vs_sector": 1.0},
+        {"code": "D", "sector": "Bank", "market": "Prime", "selected_for_review": False, "market_cap": 102, "drawdown_52w": -0.2, "volatility_60d": 0.3, "per_vs_sector": 1.0, "pbr_vs_sector": 1.0},
+    ])
+    controls = matched_controls(universe, universe.iloc[0], count=3)
+    assert controls["code"].tolist()[0] == "B"
+    assert set(controls["code"]) == {"B", "C", "D"}
+
+
+def test_forward_return_uses_trading_sessions_not_calendar_days():
+    dates = pd.to_datetime(["2026-01-09", "2026-01-12", "2026-01-13", "2026-01-14"])
+    groups = {"A": pd.DataFrame({"date": dates, "close": [100.0, 101.0, 110.0, 120.0]})}
+    result, actual_days = _forward_return(groups, "A", pd.Timestamp("2026-01-09"), 100.0, 2)
+    assert np.isclose(result, 0.10)
+    assert actual_days == 4
+
+
+def test_walk_forward_filters_future_inputs_before_selection(monkeypatch):
+    dates = pd.bdate_range("2026-01-05", periods=15)
+    prices = pd.DataFrame({
+        "code": ["A"] * len(dates),
+        "date": dates,
+        "close": np.linspace(100.0, 114.0, len(dates)),
+    })
+    financials = pd.DataFrame([
+        {"code": "A", "disclosure_date": dates[0], "marker": "past"},
+        {"code": "A", "disclosure_date": dates[-1], "marker": "future"},
+    ])
+    companies = pd.DataFrame([{"code": "A", "name": "A社", "sector": "Tech", "market": "Prime"}])
+    observed = {}
+
+    def fake_prepare(c, p, f, as_of):
+        observed["as_of"] = pd.Timestamp(as_of)
+        observed["max_price"] = p["date"].max()
+        observed["max_disclosure"] = f["disclosure_date"].max()
+        return pd.DataFrame([{
+            "code": "A", "name": "A社", "sector": "Tech", "market": "Prime",
+            "close": float(p.iloc[-1]["close"]), "return_6m": -0.1,
+        }])
+
+    def fake_apply(prepared, config):
+        out = prepared.copy()
+        out["selected_for_review"] = True
+        return out
+
+    monkeypatch.setattr(validation, "prepare_quantitative_universe", fake_prepare)
+    monkeypatch.setattr(validation, "apply_quantitative_criteria", fake_apply)
+    events = walk_forward_validation(
+        companies, prices, financials, {},
+        settings=WalkForwardConfig(
+            max_snapshots=1, spacing_trading_days=1,
+            controls_per_event=1, minimum_history_trading_days=1,
+        ),
+        horizons=(2,),
+    )
+    assert not events.empty
+    assert observed["max_price"] <= observed["as_of"]
+    assert observed["max_disclosure"] <= observed["as_of"]
+    assert events.iloc[0]["universe_source"].startswith("current_master")
+
+
+def test_walk_forward_module_has_no_market_fetch_dependency():
+    source = __import__("inspect").getsource(validation)
+    assert "fetch_and_curate_jquants" not in source
+    assert "yfinance" not in source
