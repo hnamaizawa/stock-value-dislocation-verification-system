@@ -2188,7 +2188,7 @@ def _render_history_walk_forward() -> None:
         st.info("『実行』を押すと、ローカル保存済みデータの範囲で過去検証を行います。")
         return
 
-    summary = walk_forward_summary(events)
+    summary = walk_forward_summary(events, horizons=horizons)
     dates = pd.to_datetime(events.get("selection_date"), errors="coerce").dropna()
     m1, m2, m3, m4 = st.columns(4)
     m1.metric("候補イベント", f"{len(events):,}件")
