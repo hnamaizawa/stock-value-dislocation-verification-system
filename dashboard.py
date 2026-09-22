@@ -2147,6 +2147,7 @@ def _render_history_walk_forward() -> None:
         )
         if events is not None:
             st.session_state["walk_forward_validation_events"] = events
+            st.session_state["walk_forward_validation_horizons"] = horizons
             st.success(
                 f"保存済みの同一条件の結果を読み込みました。候補イベント {len(events):,} 件です。"
             )
@@ -2171,11 +2172,12 @@ def _render_history_walk_forward() -> None:
                     settings=settings,
                     horizons=horizons,
                     cache_dir=WALK_FORWARD_CACHE,
-                    data_signature=data_signature,
+                    data_signature=f"{data_signature}:{__version__}",
                     progress=update_walk_forward_progress,
                 )
                 save_walk_forward_result(WALK_FORWARD_CACHE, cache_key, events)
                 st.session_state["walk_forward_validation_events"] = events
+                st.session_state["walk_forward_validation_horizons"] = horizons
             progress_bar.progress(1.0)
             progress_text.caption("Walk-Forward過去検証が完了しました。")
             if events.empty:
@@ -2188,7 +2190,12 @@ def _render_history_walk_forward() -> None:
         st.info("『実行』を押すと、ローカル保存済みデータの範囲で過去検証を行います。")
         return
 
-    summary = walk_forward_summary(events, horizons=horizons)
+    result_horizons = tuple(
+        int(value) for value in st.session_state.get(
+            "walk_forward_validation_horizons", tuple(STAR_OUTCOME_HORIZONS)
+        )
+    )
+    summary = walk_forward_summary(events, horizons=result_horizons)
     dates = pd.to_datetime(events.get("selection_date"), errors="coerce").dropna()
     m1, m2, m3, m4 = st.columns(4)
     m1.metric("候補イベント", f"{len(events):,}件")
