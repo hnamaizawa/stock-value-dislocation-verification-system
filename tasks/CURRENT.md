@@ -251,3 +251,13 @@ Version 0.5.1 implements the immediate performance and SBI CSV bridge improvemen
 - [x] 価格・開示のpoint-in-time切断をE2Eテストする
 - [x] 会社マスターのカバレッジと生存者バイアス警告を記録・表示する
 - [x] 新規不変条件と必須ファイルをHarnessで検査する
+
+
+## v0.6.65 Walk-Forward performance
+
+- [x] 結果キャッシュをデータ・条件・設定・バージョンで無効化する
+- [x] 過去時点の定量特徴量を再利用する
+- [x] 将来リターンを銘柄別索引と二分探索で取得する
+- [x] 簡易・標準・詳細モードを追加する
+- [x] 再現時点と基準日の進捗を表示する
+- [x] キャッシュ・索引・進捗の回帰テストとHarness検査を追加する
