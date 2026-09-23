@@ -490,6 +490,7 @@ def check_blueprint(root: Path) -> CheckResult:
         "walk_forward_cache_must_be_invalidated_by_data_config_and_version",
         "walk_forward_cached_features_must_remain_point_in_time",
         "walk_forward_progress_must_not_trigger_market_data_fetch",
+        "analysis_help_must_not_change_scores_or_trigger_data_fetch",
     }
     invariants = set(blueprint.get("non_negotiable_invariants", []))
     required_files = blueprint.get("required_files", [])
@@ -685,6 +686,38 @@ def check_translated_news_and_analyst_help(root: Path) -> CheckResult:
     )
 
 
+def check_analysis_tooltips(root: Path) -> CheckResult:
+    dashboard_path = root / "dashboard.py"
+    tests_path = root / "tests/test_analysis_tooltips.py"
+    dashboard = dashboard_path.read_text(encoding="utf-8") if dashboard_path.exists() else ""
+    tests = tests_path.read_text(encoding="utf-8") if tests_path.exists() else ""
+    required_dashboard = [
+        "ANALYSIS_ITEM_HELP", "def _analysis_help", "def _analysis_column_config",
+        "def _analysis_dataframe", "st.column_config.Column(",
+        "help=_analysis_help(str(column))", "_analysis_help(field, _analysis_help(label))",
+    ]
+    required_tests = [
+        "test_all_analysis_tables_use_shared_column_tooltips",
+        "test_major_analysis_views_have_beginner_hover_help",
+        "test_sortable_table_headers_explain_meaning_and_sort_action",
+    ]
+    missing_dashboard = [term for term in required_dashboard if term not in dashboard]
+    missing_tests = [term for term in required_tests if term not in tests]
+    direct_dataframe_calls = dashboard.count("st.dataframe(")
+    passed = (
+        dashboard_path.exists() and tests_path.exists()
+        and not missing_dashboard and not missing_tests and direct_dataframe_calls == 1
+    )
+    return CheckResult(
+        "analysis_tooltips", passed,
+        json.dumps({
+            "missing_dashboard": missing_dashboard,
+            "missing_tests": missing_tests,
+            "direct_dataframe_calls": direct_dataframe_calls,
+        }, ensure_ascii=False),
+    )
+
+
 def check_latest_trend_count_reconciliation(root: Path) -> CheckResult:
     dashboard = (root / "dashboard.py").read_text(encoding="utf-8")
     forbidden = [
@@ -832,6 +865,7 @@ def run_checks(root: Path, include_pytest: bool = True) -> list[CheckResult]:
         check_dividend_screening(root),
         check_sbi_csv_bridge(root),
         check_translated_news_and_analyst_help(root),
+        check_analysis_tooltips(root),
         check_buy_decision_support(root),
         check_external_event_review_gate(root),
         check_walk_forward_invariants(root),
