@@ -8,6 +8,7 @@ import numpy as np
 import pandas as pd
 
 from .history import STAR_OUTCOME_HORIZONS
+from .data.security_master_history import SecurityMasterSnapshot, select_security_master_as_of
 from .strategy.attribution import add_external_shock_attribution
 from .strategy.criteria import apply_quantitative_criteria, prepare_quantitative_universe
 from .walkforward_cache import load_feature_cache, save_feature_cache
@@ -203,12 +204,12 @@ def _point_in_time_inputs(
     prices: pd.DataFrame,
     financials: pd.DataFrame,
     as_of: pd.Timestamp,
-) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, dict[str, int | float | str]]:
+    historical_masters: list[SecurityMasterSnapshot] | None = None,
+) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, dict[str, int | float | str | bool]]:
     """Build an auditable as-of cohort before feature preparation.
 
-    Current curated company masters cannot resurrect securities omitted by the
-    upstream snapshot.  We therefore expose coverage instead of silently
-    claiming a survivorship-bias-free universe.
+    Prefer a dated historical company master observed on or before ``as_of``.
+    If none exists, retain the current-master fallback and disclose it.
     """
     cutoff = pd.Timestamp(as_of).tz_localize(None).normalize()
     p = prices.copy()
@@ -221,7 +222,8 @@ def _point_in_time_inputs(
     f["disclosure_date"] = pd.to_datetime(f["disclosure_date"], errors="coerce").dt.tz_localize(None)
     f = f.loc[f["disclosure_date"].notna() & (f["disclosure_date"].dt.normalize() <= cutoff)].copy()
 
-    c = companies.copy()
+    selected_master = select_security_master_as_of(historical_masters or [], cutoff)
+    c = (selected_master.companies if selected_master is not None else companies).copy()
     c["code"] = c["code"].astype(str)
     price_codes = set(p["code"])
     financial_codes = set(f["code"])
@@ -231,8 +233,22 @@ def _point_in_time_inputs(
     eligible_codes = observable_codes & master_codes
     c = c.loc[c["code"].isin(eligible_codes)].copy()
 
-    audit: dict[str, int | float | str] = {
-        "universe_source": "current_master_with_point_in_time_price_and_financial_eligibility",
+    master_snapshot_date = (
+        selected_master.as_of.date().isoformat() if selected_master is not None else ""
+    )
+    master_age_days = (
+        int((cutoff - selected_master.as_of).days) if selected_master is not None else -1
+    )
+    historical_available = selected_master is not None
+    audit: dict[str, int | float | str | bool] = {
+        "universe_source": (
+            "historical_master_with_point_in_time_price_and_financial_eligibility"
+            if historical_available
+            else "current_master_fallback_with_point_in_time_price_and_financial_eligibility"
+        ),
+        "historical_master_available": historical_available,
+        "master_snapshot_date": master_snapshot_date,
+        "master_snapshot_age_days": master_age_days,
         "observable_code_count": len(observable_codes),
         "eligible_master_code_count": len(eligible_codes),
         "missing_master_code_count": len(missing_master),
@@ -240,7 +256,13 @@ def _point_in_time_inputs(
             len(eligible_codes) / len(observable_codes) if observable_codes else 1.0
         ),
         "survivorship_bias_warning": (
-            "Historical listings absent from the curated company master cannot be reconstructed."
+            ""
+            if historical_available and not missing_master
+            else (
+                "The selected historical master does not cover every observable security."
+                if historical_available
+                else "No historical master exists on or before this replay date; current-master fallback is used."
+            )
         ),
     }
     return c, p, f, audit
@@ -256,6 +278,7 @@ def walk_forward_validation(
     cache_dir: Path | None = None,
     data_signature: str = "",
     progress: Callable[[dict], None] | None = None,
+    historical_masters: list[SecurityMasterSnapshot] | None = None,
 ) -> pd.DataFrame:
     """Replay today's quantitative rule at historical as-of dates without look-ahead.
 
@@ -287,7 +310,7 @@ def walk_forward_validation(
                 "message": "過去時点の特徴量を準備しています",
             })
         point_companies, point_prices, point_financials, cohort_audit = _point_in_time_inputs(
-            companies, prices, financials, as_of
+            companies, prices, financials, as_of, historical_masters
         )
         prepared = None
         if cache_dir is not None and data_signature:

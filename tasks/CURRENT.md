@@ -269,3 +269,13 @@ Version 0.5.1 implements the immediate performance and SBI CSV bridge improvemen
 - [x] 分析表の全列へ共通のホバー説明を追加する
 - [x] クリック可能な表の列見出しで意味とソート操作を説明する
 - [x] 回帰テストとHarness不変条件を追加する
+
+
+## v0.6.67 historical security master
+
+- [x] J-Quants更新時の銘柄マスターを日付別・不変ファイルへ保存する
+- [x] 既存certified curated runから追加API取得なしで履歴を復元する
+- [x] Walk-Forwardで評価日以前の最新マスターを使用する
+- [x] 履歴未取得時の現在マスターフォールバックとカバレッジを明示する
+- [x] 上場廃止相当銘柄の再現、履歴選択、復元境界の回帰テストを追加する
+- [x] 履歴マスターを生成アプリへコピーしない

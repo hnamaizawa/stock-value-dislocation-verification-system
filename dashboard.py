@@ -24,6 +24,7 @@ from value_dislocation.data.latest_quote import (
 )
 from value_dislocation.data.market_context import (fetch_analyst_snapshot, fetch_market_news, translate_market_news_to_japanese)
 from value_dislocation.data.sbi_import import parse_sbi_screening_csv
+from value_dislocation.data.security_master_history import load_security_master_history
 from value_dislocation.decision import build_buy_readiness, build_split_entry_plan, build_intuitive_signal, build_entry_price_guidance, build_price_trend_snapshot, build_trend_transition, prepare_trend_chart_frame
 from value_dislocation.data.search import (
     RealDataNotReadyError,
@@ -2173,6 +2174,11 @@ def _walk_forward_data_signature() -> str:
         if path.exists():
             stat = path.stat()
             state.append((str(path.relative_to(ROOT)), int(stat.st_size), int(stat.st_mtime_ns)))
+    history_dir = ROOT / "data/history/security_master"
+    if history_dir.exists():
+        for path in sorted(history_dir.glob("????-??-??.csv.gz")):
+            stat = path.stat()
+            state.append((str(path.relative_to(ROOT)), int(stat.st_size), int(stat.st_mtime_ns)))
     return hashlib.sha256(
         json.dumps(state, ensure_ascii=False, sort_keys=True).encode("utf-8")
     ).hexdigest()
@@ -2247,6 +2253,7 @@ def _render_history_walk_forward() -> None:
         disabled=not horizons,
     ):
         data = load_curated_latest(ROOT)
+        historical_masters = load_security_master_history(ROOT)
         cfg = load_config(REAL_CONFIG)
         settings = WalkForwardConfig(
             max_snapshots=int(snapshots),
@@ -2293,6 +2300,7 @@ def _render_history_walk_forward() -> None:
                     cache_dir=WALK_FORWARD_CACHE,
                     data_signature=f"{data_signature}:{__version__}",
                     progress=update_walk_forward_progress,
+                    historical_masters=historical_masters,
                 )
                 save_walk_forward_result(WALK_FORWARD_CACHE, cache_key, events)
                 st.session_state["walk_forward_validation_events"] = events
@@ -2322,6 +2330,18 @@ def _render_history_walk_forward() -> None:
     m3.metric("検証期間", f"{dates.min().date()} ～ {dates.max().date()}" if not dates.empty else "-", help=_analysis_help("検証期間"))
     coverage = pd.to_numeric(events.get("master_coverage_ratio"), errors="coerce").dropna()
     m4.metric("会社マスター最低カバレッジ", f"{coverage.min() * 100:.1f}%" if not coverage.empty else "-", help=_analysis_help("会社マスター最低カバレッジ"))
+    historical_used = events.get("historical_master_available", pd.Series(dtype=bool)).fillna(False).astype(bool)
+    if bool(historical_used.any()):
+        used_dates = events.loc[historical_used, "master_snapshot_date"].dropna().astype(str)
+        st.success(
+            f"過去銘柄マスターを {historical_used.sum():,}/{len(events):,} 候補イベントで使用しました。"
+            + (f" 使用スナップショット: {used_dates.min()} ～ {used_dates.max()}。" if not used_dates.empty else "")
+        )
+    else:
+        st.warning(
+            "評価日以前の過去銘柄マスターがないため、現在マスターで代用しています。"
+            "今後のデータ更新ごとに日付別マスターが蓄積されます。"
+        )
     missing_master = pd.to_numeric(events.get("missing_master_code_count"), errors="coerce").fillna(0)
     if missing_master.gt(0).any():
         st.warning(

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "stock-value-dislocation-verification-system"
-version = "0.6.66"
+version = "0.6.67"
 description = "日本株の価格乖離を実データと最新外部日足で調査し、履歴から定量抽出ルールも安全に改善する投資判断検証支援システム"
 readme = "README.md"
 requires-python = ">=3.11"

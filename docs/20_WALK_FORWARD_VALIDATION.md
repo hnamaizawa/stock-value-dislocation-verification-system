@@ -13,7 +13,8 @@ For every replay date:
 2. Financial features use rows with `disclosure_date <= replay_date`.
 3. Selection is completed before any future price is joined.
 4. 10/20/30/60/90/180 **trading-session** returns are used only to score the already-selected event.
-5. No J-Quants or Yahoo fetch is triggered by Walk-Forward execution; it uses the certified local curated snapshot.
+5. The newest historical security-master snapshot on or before the replay date defines the company universe.
+6. No J-Quants or Yahoo fetch is triggered by Walk-Forward execution; it uses certified local data only.
 
 ## Matched non-selected controls
 
@@ -44,14 +45,20 @@ Missing benchmark/sector data remains missing and is never fabricated as zero.
 
 Before each replay, prices are restricted to `date <= replay_date` and financials to
 `disclosure_date <= replay_date`. A security must have both observable price and
-financial data by that date and must exist in the curated company master.
+financial data by that date and must exist in the selected historical company master.
 
-The result records `observable_code_count`, `eligible_master_code_count`,
-`missing_master_code_count`, and `master_coverage_ratio`. This makes missing-master
-coverage visible and prevents it from being silently described as a complete historical
-universe. It does **not** recreate delisted securities that are absent from the upstream
-curated snapshot; therefore the screen can reduce and disclose survivorship risk but
-cannot claim to eliminate it without historical security-master snapshots.
+Each J-Quants update archives its dated CompanyMaster. Existing certified curated runs are
+backfilled without API access. Walk-Forward chooses the newest snapshot whose date is on or
+before the replay date, so a delisted security retained in that snapshot can remain in the
+historical universe even when it is absent from the current CompanyMaster.
+
+The result records `universe_source`, `historical_master_available`, `master_snapshot_date`,
+`master_snapshot_age_days`, `observable_code_count`, `eligible_master_code_count`,
+`missing_master_code_count`, and `master_coverage_ratio`. When no snapshot exists on or
+before the replay date, the current CompanyMaster is used only as an explicitly disclosed
+fallback. This substantially reduces survivorship bias as snapshots accumulate, but cannot
+reconstruct a security absent from every saved or backfilled master and therefore does not
+claim complete elimination of survivorship bias.
 
 ## Horizon convention
 

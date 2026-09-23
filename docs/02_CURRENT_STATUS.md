@@ -1,5 +1,13 @@
 # Current status
 
+## Version 0.6.67
+
+J-Quants実データ更新ごとの銘柄マスターを日付別に保存し、既存certified curated runからも
+復元する。Walk-Forwardは評価日以前の最新マスターを用い、保存済み履歴に存在する
+上場廃止相当銘柄を過去母集団へ含める。履歴がない期間の現在マスターフォールバックは
+監査列と画面で明示する。未保存の過去母集団までは再構成できないため、生存者バイアスの
+完全排除ではない。
+
 ## Version 0.5.1
 
 The application now precomputes security-level features after each actual-data update, uses an explicit apply-button form for interactive screening, and imports SBI screening CSV files for local matching. J-Quants raw retrieval remains serial, rate-limited, cached, and resumable. SBI login and order transmission remain out of scope.

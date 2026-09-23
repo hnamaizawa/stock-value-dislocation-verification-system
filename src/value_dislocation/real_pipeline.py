@@ -8,6 +8,7 @@ import pandas as pd
 from .config import load_config, project_root_from_config
 from .data.jquants import date_window, fetch_and_curate_jquants, fetch_policy_from_config
 from .data.search import load_curated_latest
+from .data.security_master_history import backfill_security_master_history
 from .data.snapshot import now_jst, read_manifest, write_dataframe
 from .data.performance import build_feature_snapshot
 from .strategy.criteria import (
@@ -49,6 +50,7 @@ def run_real_pipeline(
         client=client,
         fetch_policy=fetch_policy_from_config(provider),
     )
+    historical_master_backfill = backfill_security_master_history(root)
 
     # Rule learning may scan point-in-time history and attach forward returns. Keep
     # that CPU-heavy work out of Streamlit navigation and run it only for this explicit
@@ -175,6 +177,7 @@ def run_real_pipeline(
         "price_rows": int(len(data["prices"])),
         "financial_rows": int(len(data["financials"])),
         "company_rows": int(len(data["companies"])),
+        "historical_master_backfilled": int(len(historical_master_backfill)),
         "audit_rows": int(len(audit)),
         "shortlist_rows": int(len(shortlist)),
         "orders_generated": 0,
