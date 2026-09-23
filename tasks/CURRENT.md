@@ -261,3 +261,11 @@ Version 0.5.1 implements the immediate performance and SBI CSV bridge improvemen
 - [x] 簡易・標準・詳細モードを追加する
 - [x] 再現時点と基準日の進捗を表示する
 - [x] キャッシュ・索引・進捗の回帰テストとHarness検査を追加する
+
+
+## v0.6.66 analysis item hover help
+
+- [x] 条件設定・候補・履歴・実績検証・Walk-Forward・個別銘柄の主要項目へ短い説明を追加する
+- [x] 分析表の全列へ共通のホバー説明を追加する
+- [x] クリック可能な表の列見出しで意味とソート操作を説明する
+- [x] 回帰テストとHarness不変条件を追加する

@@ -326,6 +326,120 @@ METRIC_DESCRIPTIONS = {
     "forecast_dividend_change_rate": "前期年間配当に対する予想年間配当の増減率です。プラスは増配、マイナスは減配予想です。",
 }
 
+# Keep beginner-facing explanations in one place so the same term means the
+# same thing in filters, metric cards, and table-column tooltips.
+ANALYSIS_ITEM_HELP = {
+    "code": "東京証券取引所の銘柄コードです。",
+    "コード": "東京証券取引所の銘柄コードです。",
+    "name": "上場会社の名称です。",
+    "企業名": "上場会社の名称です。",
+    "market": "Prime・Standard・Growthなど、銘柄が上場している市場区分です。",
+    "市場": "Prime・Standard・Growthなど、銘柄が上場している市場区分です。",
+    "sector": "会社の主な事業内容に基づく業種区分です。",
+    "close": METRIC_DESCRIPTIONS["close"],
+    "終値": METRIC_DESCRIPTIONS["close"],
+    "分析終値": "候補抽出に使ったJ-Quants分析基準日の終値です。最新株価とは異なる場合があります。",
+    "最新株価": "Yahoo Finance系から取得できた参考用の最新株価です。注文前にはSBI証券で確認してください。",
+    "drawdown_52w": METRIC_DESCRIPTIONS["drawdown_52w"],
+    "52週高値比": METRIC_DESCRIPTIONS["drawdown_52w"],
+    "return_6m": METRIC_DESCRIPTIONS["return_6m"],
+    "6か月騰落率": METRIC_DESCRIPTIONS["return_6m"],
+    "relative_return_6m": METRIC_DESCRIPTIONS["relative_return_6m"],
+    "市場比較相対": METRIC_DESCRIPTIONS["relative_return_6m"],
+    "sales_cagr_3y": METRIC_DESCRIPTIONS["sales_cagr_3y"],
+    "operating_margin": METRIC_DESCRIPTIONS["operating_margin"],
+    "equity_ratio": METRIC_DESCRIPTIONS["equity_ratio"],
+    "forecast_dividend_yield": METRIC_DESCRIPTIONS["forecast_dividend_yield"],
+    "quantitative_score": "財務・割安度・株価下落など、定量条件の充足度を合計した比較用スコアです。",
+    "strategy_score": "選択中の抽出ルールで計算した比較用スコアです。利益確率ではありません。",
+    "定量スコア": "財務・割安度・株価下落など、定量条件の充足度を合計した比較用スコアです。",
+    "スコア": "条件の充足度を比較する参考点です。将来の利益を保証しません。",
+    "selected_for_review": "定量条件を通過し、人が詳しく確認する候補になったかを示します。",
+    "selection_strategy": "候補抽出に使ったルールです。割安株調査または値動き活発度などを表します。",
+    "抽出ルール": "候補抽出に使ったルールです。割安株調査または値動き活発度などを表します。",
+    "final_evaluation": "最新トレンドを含めて保存した最終評価です。◎☆、◎、○、△、×などで表します。",
+    "intuitive_symbol": "主要条件とトレンドをまとめた直感的な評価記号です。",
+    "評価": "主要条件とトレンドをまとめた評価です。単独で売買を決めるものではありません。",
+    "最新判定": "外部最新日足で再確認したトレンド評価です。定量スコア自体は変更しません。",
+    "evaluation_status": "当日評価済み、後日補完、未評価など、評価データの状態です。",
+    "未評価理由": "最終評価を作れなかった理由です。データ不足や外部取得失敗などを区別します。",
+    "analysis_date": "定量分析を実行し、候補状態を保存した日です。",
+    "evaluation_date": "最新トレンド評価を保存した日です。",
+    "data_as_of": "分析に使用した市場・財務データの基準日です。",
+    "selection_date": "Walk-Forwardで、その時点の情報だけを使って候補を選んだ日です。",
+    "star_date": "◎☆評価が記録された日です。",
+    "first_star_date": "この銘柄が最初に◎☆になった日です。",
+    "latest_star_date": "この銘柄が直近で◎☆になった日です。",
+    "star_count": "保存履歴の中で◎☆になった回数です。",
+    "entry_price": "評価日の終値を使った検証上の基準価格です。実際の約定価格ではありません。",
+    "latest_entry_price": "直近の◎☆評価日における検証上の基準価格です。",
+    "return_10d": "候補選定後10取引日目までの株価リターンです。",
+    "return_20d": "候補選定後20取引日目までの株価リターンです。",
+    "return_30d": "候補選定後30取引日目までの株価リターンです。",
+    "return_60d": "候補選定後60取引日目までの株価リターンです。",
+    "return_90d": "候補選定後90取引日目までの株価リターンです。",
+    "return_180d": "候補選定後180取引日目までの株価リターンです。",
+    "selected_return": "その時点で選ばれた候補銘柄の、その後の平均リターンです。",
+    "control_return": "似た条件でも選ばれなかった比較銘柄の、その後の平均リターンです。",
+    "selection_effect": "候補銘柄のリターンから比較銘柄のリターンを引いた差です。プラスほど選別が有効だった可能性があります。",
+    "external_shock_ratio": "株価変動のうち、市場・業種など企業外の要因で説明できる割合の参考値です。",
+    "外因説明率": "株価変動のうち、市場・業種など企業外の要因で説明できる割合の参考値です。",
+    "master_coverage_ratio": "過去時点の対象銘柄を、現在保存している会社マスターでどれだけ確認できたかを示します。",
+    "survivorship_bias_warning": "上場廃止などで現在の会社マスターから消えた銘柄を復元できない可能性を示す注意です。",
+    "候補イベント": "Walk-Forwardの各過去時点で定量条件を通過した候補の延べ件数です。",
+    "再現時点": "過去の何日分をさかのぼって候補抽出を再現したかを示します。",
+    "検証期間": "Walk-Forwardで最初に再現した日から最後に再現した日までの範囲です。",
+    "会社マスター最低カバレッジ": "検証期間中で最も低かった会社マスターの網羅率です。低いほど生存者バイアスに注意が必要です。",
+    "fail_reasons": "必須条件を通過できなかった理由です。",
+    "warning_reasons": "候補から直ちに除外はしないものの、追加確認が必要な注意点です。",
+    "種類": "確認材料を価格・業績・配当などに分類したものです。",
+    "確認条件": "売却や再確認を検討するきっかけの例です。自動注文条件ではありません。",
+    "意味": "その条件が投資仮説に与える影響を簡単に説明しています。",
+    "判定": "現在のデータによる通過・注意・不通過・不明の状態です。",
+    "確認項目": "購入判断前に確認する材料です。",
+    "現在の内容": "現在取得できているデータから整理した確認結果です。",
+    "disclosure_date": "決算情報が公表され、市場参加者が知ることができた日です。",
+    "period_end": "決算が対象とする会計期間の終了日です。",
+    "statement_type": "本決算・四半期決算など、財務諸表の種類です。",
+    "sales": "会社が商品やサービスの提供で得た売上高です。",
+    "operating_profit": "本業から得た利益です。",
+    "operating_cf": "本業による現金の増減です。利益が実際の現金につながっているかを見る材料です。",
+    "equity": "返済義務のない自己資本の金額です。",
+    "total_assets": "会社が保有する資産の合計です。",
+    "forecast_operating_profit": "会社が予想している通期の営業利益です。",
+    "eps": "1株当たり利益です。株価と利益の関係を見る基礎指標です。",
+    "book_value_per_share": "1株当たり純資産です。PBRを考える基礎になります。",
+    "actual_annual_dividend_per_share": "直近実績の1株当たり年間配当です。",
+    "forecast_annual_dividend_per_share": METRIC_DESCRIPTIONS["forecast_annual_dividend_per_share"],
+    "actual_payout_ratio": "直近実績で、利益のうち配当に回した割合です。",
+    "forecast_payout_ratio": "会社予想利益に対する予想配当の割合です。",
+    "date": "この行の価格・予定・記録が対象とする日です。",
+}
+
+
+def _analysis_help(item: str, fallback: str | None = None) -> str:
+    """Return a short beginner-facing explanation for one analysis item."""
+    return ANALYSIS_ITEM_HELP.get(str(item), fallback or f"{item}を分析・比較するための項目です。")
+
+
+def _analysis_column_config(frame: pd.DataFrame) -> dict:
+    """Add hover help to every displayed analysis-table column."""
+    return {
+        str(column): st.column_config.Column(
+            label=str(column),
+            help=_analysis_help(str(column)),
+        )
+        for column in frame.columns
+    }
+
+
+def _analysis_dataframe(frame: pd.DataFrame, **kwargs) -> None:
+    """Render an analysis table with beginner-facing help on every header."""
+    existing = dict(kwargs.pop("column_config", {}) or {})
+    generated = _analysis_column_config(frame)
+    generated.update(existing)
+    st.dataframe(frame, column_config=generated, **kwargs)
+
 GENERAL_METRIC_GUIDES = {
     "close": "比較基準なし",
     "drawdown_52w": "目安 -20%以下",
@@ -696,7 +810,7 @@ def _sortable_header_button(container, label: str, field: str, key: str) -> None
         f"{label}{marker}",
         key=f"{key}_sort_header_{field}",
         width="stretch",
-        help="クリックで昇順／降順を切り替えます。",
+        help=f"{_analysis_help(field, _analysis_help(label))} クリックで昇順／降順を切り替えます。",
         on_click=_toggle_sort_state,
         args=(key, field),
     )
@@ -715,7 +829,7 @@ def _render_history_stock_buttons(
     history tab intact while the user inspects and closes individual stock tabs.
     """
     if frame.empty or "code" not in frame.columns:
-        st.dataframe(frame, width="stretch", hide_index=True)
+        _analysis_dataframe(frame, width="stretch", hide_index=True)
         return
 
     if caption:
@@ -757,7 +871,7 @@ def _render_history_stock_buttons(
                 col.write(str(value))
 
     with st.expander("現在ページの全列を表形式で確認", expanded=False):
-        st.dataframe(display_frame, width="stretch", hide_index=True)
+        _analysis_dataframe(display_frame, width="stretch", hide_index=True)
 
 
 @st.fragment
@@ -1042,15 +1156,15 @@ def _render_latest_candidate_trends(score_passed: pd.DataFrame, *, star_only: bo
         result = all_result
 
     count_cols = st.columns(5 if (star_only and not active_mode) else 4)
-    count_cols[0].metric(target_label, f"{total:,}")
-    count_cols[1].metric("統合一覧", f"{len(all_result):,}")
-    count_cols[2].metric("外部株価取得成功", f"{success_count:,}")
+    count_cols[0].metric(target_label, f"{total:,}", help="定量スコアを通過し、最新トレンド再確認の対象になった銘柄数です。")
+    count_cols[1].metric("統合一覧", f"{len(all_result):,}", help="取得成功・失敗・未実施を含め、一覧に残した全対象銘柄数です。")
+    count_cols[2].metric("外部株価取得成功", f"{success_count:,}", help="Yahoo Finance系の最新日足を取得してトレンドを再確認できた銘柄数です。")
     if skipped_count:
-        count_cols[3].metric("100件以上のため未実施", f"{skipped_count:,}")
+        count_cols[3].metric("100件以上のため未実施", f"{skipped_count:,}", help="一括外部取得の安全上限を超えたため、最新トレンド再確認を行わなかった銘柄数です。")
     else:
-        count_cols[3].metric("取得失敗・判定不能", f"{failed_count:,}")
+        count_cols[3].metric("取得失敗・判定不能", f"{failed_count:,}", help="外部日足を取得できず、最新トレンドを判定できなかった銘柄数です。")
     if star_only and not active_mode:
-        count_cols[4].metric("☆該当", f"{star_count:,}")
+        count_cols[4].metric("☆該当", f"{star_count:,}", help="主要な定量条件に加えて短期反転条件も確認できた◎☆銘柄数です。利益保証ではありません。")
 
     if result.empty and star_only and not active_mode:
         st.info("現在の最新トレンド判定では、☆条件に該当する銘柄はありません。")
@@ -1327,6 +1441,7 @@ def render_condition_builder() -> None:
                 preset_names() + ["カスタム"],
                 key="condition_preset",
                 on_change=_on_preset_change,
+                help="安全重視・標準・割安重視など、複数の抽出条件をまとめて切り替えます。",
             )
             if selected_preset in PRESETS:
                 st.caption(PRESETS[selected_preset]["description"])
@@ -1354,11 +1469,11 @@ def render_condition_builder() -> None:
             equity = st.slider("自己資本比率（%以上）", 0, 80, value=int(st.session_state["ui_equity_pct"]), step=5, help=METRIC_HELP["minimum_equity_ratio"], disabled=active_mode)
             ocf_years = st.slider("営業CFがプラスの年数（直近最大3期）", 0, 3, value=int(st.session_state["ui_ocf_years"]), step=1, help=METRIC_HELP["minimum_operating_cf_positive_ratio_3y"], disabled=active_mode)
             sales_cagr = st.slider("売上CAGR（%以上）", -30, 30, value=int(st.session_state["ui_sales_cagr_pct"]), step=1, help=METRIC_HELP["minimum_sales_cagr_3y"], disabled=active_mode)
-            require_sales = st.checkbox("売上履歴が不足する銘柄を除外", value=bool(st.session_state["ui_require_sales_history"]), disabled=active_mode)
+            require_sales = st.checkbox("売上履歴が不足する銘柄を除外", value=bool(st.session_state["ui_require_sales_history"]), disabled=active_mode, help="売上成長を十分な年数で確認できない銘柄を候補から外します。")
         with col3:
             op_margin = st.slider("営業利益率（%以上）", -10, 30, value=int(st.session_state["ui_op_margin_pct"]), step=1, help=METRIC_HELP["minimum_operating_margin"], disabled=active_mode)
             forecast_decline = st.slider("許容する会社予想の最大減益率（%）", 0, 80, value=int(st.session_state["ui_forecast_decline_pct"]), step=5, help=METRIC_HELP["maximum_forecast_op_decline"], disabled=active_mode)
-            require_forecast = st.checkbox("会社予想がない銘柄を除外", value=bool(st.session_state["ui_require_forecast"]), disabled=active_mode)
+            require_forecast = st.checkbox("会社予想がない銘柄を除外", value=bool(st.session_state["ui_require_forecast"]), disabled=active_mode, help="会社発表の業績予想を確認できない銘柄を候補から外します。")
             drawdown = st.slider("52週高値からの下落率（%以上）", 0, 70, value=int(st.session_state["ui_drawdown_pct"]), step=1, help=METRIC_HELP["minimum_drawdown_52w"], disabled=active_mode)
 
         st.markdown("### 2. 構造悪化ガード（バリュートラップ回避）")
@@ -1402,14 +1517,14 @@ def render_condition_builder() -> None:
         st.markdown("### 3. 配当条件")
         dv1, dv2, dv3 = st.columns(3)
         with dv1:
-            require_dividend = st.checkbox("配当を必須条件にする", value=bool(st.session_state["ui_require_dividend"]), disabled=active_mode)
-            min_dividend_per_share = st.number_input("最低1株年間配当（円）", min_value=0.0, max_value=1000.0, value=float(st.session_state["ui_min_dividend_per_share"]), step=1.0, disabled=(not require_dividend) or active_mode)
+            require_dividend = st.checkbox("配当を必須条件にする", value=bool(st.session_state["ui_require_dividend"]), disabled=active_mode, help="オンにすると、指定した配当利回り・配当額・配当性向を必須条件にします。")
+            min_dividend_per_share = st.number_input("最低1株年間配当（円）", min_value=0.0, max_value=1000.0, value=float(st.session_state["ui_min_dividend_per_share"]), step=1.0, disabled=(not require_dividend) or active_mode, help="1株当たり年間配当がこの金額以上の銘柄だけを残します。")
         with dv2:
             min_dividend_yield_pct = st.slider("最低予想配当利回り（%）", 0.0, 15.0, value=float(st.session_state["ui_min_dividend_yield_pct"]), step=0.1, disabled=(not require_dividend) or active_mode, help=METRIC_HELP["minimum_forecast_dividend_yield"])
-            max_dividend_yield_pct = st.slider("最大予想配当利回り（%）", 1.0, 20.0, value=max(1.0, float(st.session_state["ui_max_dividend_yield_pct"])), step=0.5, disabled=(not require_dividend) or active_mode)
+            max_dividend_yield_pct = st.slider("最大予想配当利回り（%）", 1.0, 20.0, value=max(1.0, float(st.session_state["ui_max_dividend_yield_pct"])), step=0.5, disabled=(not require_dividend) or active_mode, help="異常に高い利回りを減配懸念として除外する上限です。")
         with dv3:
             max_payout_pct = st.slider("最大配当性向（%）", 10.0, 200.0, value=float(st.session_state["ui_max_payout_pct"]), step=5.0, disabled=(not require_dividend) or active_mode, help=METRIC_HELP["maximum_payout_ratio"])
-            exclude_dividend_cut = st.checkbox("減配予想の銘柄を除外", value=bool(st.session_state["ui_exclude_dividend_cut"]), disabled=(not require_dividend) or active_mode)
+            exclude_dividend_cut = st.checkbox("減配予想の銘柄を除外", value=bool(st.session_state["ui_exclude_dividend_cut"]), disabled=(not require_dividend) or active_mode, help="会社予想の年間配当が前期実績を下回る銘柄を除外します。")
         st.caption("予想配当は『次期会社予想 → 当期会社予想 → 直近実績』の順で採用します。高利回りは減配懸念で株価が下がっている場合もあります。")
 
         st.markdown("### 4. 市場比較・相対条件")
@@ -1474,9 +1589,9 @@ def render_condition_builder() -> None:
         st.markdown("### 6. 順位付けと表示件数")
         sc1, sc2, sc3 = st.columns(3)
         with sc1:
-            min_score = st.slider("定量スコア（点以上）", 0, 80, value=int(st.session_state["ui_min_score"]), step=1, disabled=active_mode)
+            min_score = st.slider("定量スコア（点以上）", 0, 80, value=int(st.session_state["ui_min_score"]), step=1, disabled=active_mode, help=_analysis_help("定量スコア"))
         with sc2:
-            max_queue = st.slider("最大候補数", 5, 100, value=int(st.session_state["ui_max_queue"]), step=5)
+            max_queue = st.slider("最大候補数", 5, 100, value=int(st.session_state["ui_max_queue"]), step=5, help="スコア上位から一覧へ残す候補銘柄数の上限です。")
         with sc3:
             star_only = st.checkbox(
                 "☆だけの銘柄を表示",
@@ -1555,23 +1670,23 @@ def render_condition_builder() -> None:
     st.divider()
     st.markdown("### 再計算結果")
     metrics = st.columns(5)
-    metrics[0].metric("評価可能銘柄", f"{len(audit):,}")
+    metrics[0].metric("評価可能銘柄", f"{len(audit):,}", help="取得済みデータから抽出条件を評価できた銘柄数です。")
     if applied_strategy == "active_trading":
-        metrics[1].metric("高ボラ通過", f"{funnel[2]['count']:,}")
-        metrics[2].metric("日中値幅通過", f"{funnel[3]['count']:,}")
-        metrics[3].metric("活発度通過", f"{funnel[-1]['count']:,}")
+        metrics[1].metric("高ボラ通過", f"{funnel[2]['count']:,}", help="設定した60日年率ボラティリティ以上だった銘柄数です。")
+        metrics[2].metric("日中値幅通過", f"{funnel[3]['count']:,}", help="設定した20日平均日中値幅以上だった銘柄数です。")
+        metrics[3].metric("活発度通過", f"{funnel[-1]['count']:,}", help="値動き活発度スコアの条件を通過した銘柄数です。")
     else:
-        metrics[1].metric("財務条件通過", f"{funnel[2]['count']:,}")
-        metrics[2].metric("価格下落条件通過", f"{funnel[3]['count']:,}")
-        metrics[3].metric("スコア通過", f"{funnel[-1]['count']:,}")
-    metrics[4].metric("統合候補", f"{len(score_passed):,}")
-    st.dataframe(pd.DataFrame(funnel), width="stretch", hide_index=True)
+        metrics[1].metric("財務条件通過", f"{funnel[2]['count']:,}", help="自己資本・利益・売上などの必須財務条件を通過した銘柄数です。")
+        metrics[2].metric("価格下落条件通過", f"{funnel[3]['count']:,}", help="52週高値からの下落や市場比較など、価格条件を通過した銘柄数です。")
+        metrics[3].metric("スコア通過", f"{funnel[-1]['count']:,}", help="必須条件と最低定量スコアを通過した銘柄数です。")
+    metrics[4].metric("統合候補", f"{len(score_passed):,}", help="最新トレンド再確認へ進む候補銘柄数です。")
+    _analysis_dataframe(pd.DataFrame(funnel), width="stretch", hide_index=True)
 
     export_document = profile_document("current_conditions", st.session_state["condition_preset"], overrides)
     export_json = json.dumps(export_document, ensure_ascii=False, indent=2)
     tools1, tools2, tools3 = st.columns(3)
     with tools1:
-        profile_name = st.text_input("設定名", value="my_conditions")
+        profile_name = st.text_input("設定名", value="my_conditions", help="現在の抽出条件をPCへ保存するときのファイル名です。")
         if st.button("この設定をPCへ保存"):
             path = save_profile(PROFILE_DIR, profile_name, st.session_state["condition_preset"], overrides)
             st.success(f"保存しました: {path.name}")
@@ -1596,7 +1711,7 @@ def render_condition_builder() -> None:
         displayed_shortlist = shortlist.loc[shortlist["code"].astype(str).isin(displayed_codes)].copy()
         with st.expander("詳細指標を表で表示"):
             display_cols = (["code", "name", "market", "sector", "close", "strategy_score", "daytrade_activity_score", "volatility_60d", "average_intraday_range_20d", "average_turnover_yen_20d", "warning_reasons"] if applied_strategy == "active_trading" else ["code", "name", "market", "sector", "close", "quantitative_score", "drawdown_52w", "relative_return_6m", "sales_cagr_3y", "operating_margin", "operating_cf_positive_ratio_3y", "equity_ratio", "forecast_op_growth", "forecast_annual_dividend_per_share", "forecast_dividend_yield", "payout_ratio", "forecast_dividend_change_rate", "warning_reasons"])
-            st.dataframe(displayed_shortlist[[c for c in display_cols if c in displayed_shortlist.columns]], width="stretch", hide_index=True)
+            _analysis_dataframe(displayed_shortlist[[c for c in display_cols if c in displayed_shortlist.columns]], width="stretch", hide_index=True)
         if bool(st.session_state.get("ui_star_only", False)) and applied_strategy != "active_trading":
             st.download_button(
                 "☆限定候補CSVをダウンロード",
@@ -1610,7 +1725,7 @@ def render_condition_builder() -> None:
 
     with st.expander("条件に近かったが除外された銘柄"):
         near = audit.loc[~audit["selected_for_review"]].sort_values("quantitative_score", ascending=False).head(30)
-        st.dataframe(near[[c for c in ["code", "name", "quantitative_score", "fail_reasons", "warning_reasons"] if c in near.columns]], width="stretch", hide_index=True)
+        _analysis_dataframe(near[[c for c in ["code", "name", "quantitative_score", "fail_reasons", "warning_reasons"] if c in near.columns]], width="stretch", hide_index=True)
 
 
 
@@ -1639,15 +1754,15 @@ def _render_history_daily(evaluation_signature) -> None:
         max_value=last_day,
         key="history_period",
     )
-    query = c2.text_input("銘柄コード・企業名", value="", key="history_query")
-    selected_only = c3.checkbox("定量候補だけ表示（selected_for_review）", value=True, key="history_selected_only")
+    query = c2.text_input("銘柄コード・企業名", value="", key="history_query", help="保存済み履歴を銘柄コードまたは企業名の一部で絞り込みます。")
+    selected_only = c3.checkbox("定量候補だけ表示（selected_for_review）", value=True, key="history_selected_only", help=_analysis_help("selected_for_review"))
     if isinstance(period, (tuple, list)) and len(period) == 2:
         start, end = period
     else:
         start = end = period
 
     final_options = ["◎☆", "◎", "○", "△", "×", "未評価", "対象外"]
-    selected_final = c4.multiselect("当日の最終評価", final_options, default=final_options, key="history_final_evaluation")
+    selected_final = c4.multiselect("当日の最終評価", final_options, default=final_options, key="history_final_evaluation", help=_analysis_help("final_evaluation"))
     analysis_signature = _analysis_history_signature(start, end)
     hist = _cached_load_attached_analysis_history(
         str(ROOT), start.isoformat(), end.isoformat(), selected_only, analysis_signature, evaluation_signature
@@ -1664,9 +1779,9 @@ def _render_history_daily(evaluation_signature) -> None:
 
     f1, f2 = st.columns(2)
     status_options = ["当日評価済み", "後日補完", "未評価", "評価対象外"]
-    selected_status = f1.multiselect("評価状態", status_options, default=status_options, key="history_evaluation_status")
+    selected_status = f1.multiselect("評価状態", status_options, default=status_options, key="history_evaluation_status", help=_analysis_help("evaluation_status"))
     reason_options = ["評価履歴なし", "Yahoo取得失敗", "Yahoo100件制限で未実施", "旧履歴", "履歴不足／再現不能", "その他", "定量候補外"]
-    selected_reasons = f2.multiselect("未評価理由", reason_options, default=reason_options, key="history_unassessed_reason")
+    selected_reasons = f2.multiselect("未評価理由", reason_options, default=reason_options, key="history_unassessed_reason", help=_analysis_help("未評価理由"))
     if selected_status and not hist.empty:
         hist = hist.loc[hist["evaluation_status"].astype(str).isin(selected_status)]
     if selected_reasons and not hist.empty:
@@ -1675,7 +1790,7 @@ def _render_history_daily(evaluation_signature) -> None:
         hist = hist.loc[reason_mask | assessed_mask]
 
     _render_history_analysis_summary(daily_history_text_summary(hist))
-    st.metric("該当履歴", f"{len(hist):,} 行")
+    st.metric("該当履歴", f"{len(hist):,} 行", help="現在の期間・銘柄・評価フィルターに一致する保存済み分析履歴の行数です。")
     if not hist.empty:
         daily_chart = daily_evaluation_counts(hist)
         if not daily_chart.empty:
@@ -1981,7 +2096,7 @@ def _render_history_star_validation(evaluation: pd.DataFrame) -> None:
 
     st.markdown("#### ◎☆銘柄サマリ（同一銘柄は1行）")
     st.caption("同じ銘柄が複数回◎☆になっても銘柄コード単位で1行にまとめます。初回/最新の◎☆日、◎☆回数、最新entry_price、確定済みイベントの平均10/20/30/60/90/180日リターンを表示します。")
-    sort_order = st.segmented_control("並び順", ["最新◎☆日の新しい順", "初回◎☆日の古い順"], default="最新◎☆日の新しい順", key="star_history_sort_order")
+    sort_order = st.segmented_control("並び順", ["最新◎☆日の新しい順", "初回◎☆日の古い順"], default="最新◎☆日の新しい順", key="star_history_sort_order", help="◎☆銘柄サマリを直近順または初回発生日順に並べます。")
     summary = summarize_star_outcomes_by_code(star_events)
     for h in STAR_OUTCOME_HORIZONS:
         col = f"return_{h}d_avg"
@@ -1998,7 +2113,7 @@ def _render_history_star_validation(evaluation: pd.DataFrame) -> None:
     _render_history_sortable_stock_table(summary, "star_summary")
     st.caption("return_*_avg は同じ銘柄の◎☆開始イベントのうち、その期間の実績が確定済みのものだけを平均した値（%）です。completed_*d は平均に含めたイベント数です。")
 
-    if st.checkbox("◎☆開始イベントを個別表示する", value=False, key="show_star_event_details"):
+    if st.checkbox("◎☆開始イベントを個別表示する", value=False, key="show_star_event_details", help="銘柄別の集約ではなく、◎☆になった日ごとの実績を表示します。"):
         event_show = star_events.copy()
         for h in STAR_OUTCOME_HORIZONS:
             if f"return_{h}d" in event_show.columns:
@@ -2019,12 +2134,13 @@ def _render_history_star_validation(evaluation: pd.DataFrame) -> None:
         for col in display.columns:
             if col.endswith("平均") or col.endswith("プラス率"):
                 display[col] = pd.to_numeric(display[col], errors="coerce") * 100
-        st.dataframe(display, width="stretch", hide_index=True)
+        _analysis_dataframe(display, width="stretch", hide_index=True)
         horizon = st.segmented_control(
             "条件別グラフの期間",
             [f"{h}日" for h in STAR_OUTCOME_HORIZONS],
             default="90日",
             key="history_condition_chart_horizon",
+            help="条件ごとの平均リターンを比較する、選定後の取引日数を選びます。",
         )
         avg_col = f"{horizon}平均"
         count_col = f"{horizon}確定件数"
@@ -2091,21 +2207,23 @@ def _render_history_walk_forward() -> None:
         },
     }
     mode_name = st.segmented_control(
-        "検証モード", list(modes), default="標準", key="wf_mode"
+        "検証モード", list(modes), default="標準", key="wf_mode",
+        help="簡易は短時間、標準は通常確認、詳細は多くの過去時点を使う検証です。",
     )
     mode = modes.get(mode_name or "標準", modes["標準"])
     st.caption(mode["description"])
-    advanced = st.checkbox("詳細設定を変更", value=False, key="wf_advanced")
+    advanced = st.checkbox("詳細設定を変更", value=False, key="wf_advanced", help="再現時点数・間隔・比較銘柄数・評価期間を個別に変更します。")
     if advanced:
         c1, c2, c3 = st.columns(3)
-        snapshots = c1.slider("再現時点数", 3, 12, int(mode["snapshots"]), 1, key="wf_snapshots")
-        spacing = c2.slider("時点間隔（取引日）", 10, 40, int(mode["spacing"]), 5, key="wf_spacing")
-        controls = c3.slider("類似非選択銘柄数", 3, 10, int(mode["controls"]), 1, key="wf_controls")
+        snapshots = c1.slider("再現時点数", 3, 12, int(mode["snapshots"]), 1, key="wf_snapshots", help="過去の何時点で候補抽出を再現するかを指定します。多いほど時間がかかります。")
+        spacing = c2.slider("時点間隔（取引日）", 10, 40, int(mode["spacing"]), 5, key="wf_spacing", help="各再現日の間を何取引日空けるかを指定します。")
+        controls = c3.slider("類似非選択銘柄数", 3, 10, int(mode["controls"]), 1, key="wf_controls", help="候補1件と比較する、似ているが選ばれなかった銘柄の最大数です。")
         horizon_values = st.multiselect(
             "評価期間（取引日）",
             list(STAR_OUTCOME_HORIZONS),
             default=list(mode["horizons"]),
             key="wf_horizons",
+            help="候補選定後、何取引日目の成績を評価するかを選びます。",
         )
         horizons = tuple(sorted(int(value) for value in horizon_values))
     else:
@@ -2119,7 +2237,8 @@ def _render_history_walk_forward() -> None:
         "『その時点で選ばれなかった銘柄』から選びます。通常表示だけではデータ取得・再計算しません。"
     )
     force_recalculate = st.checkbox(
-        "保存済み結果を使わず再計算", value=False, key="wf_force_recalculate"
+        "保存済み結果を使わず再計算", value=False, key="wf_force_recalculate",
+        help="同じ条件の保存済み結果を無視して再計算します。通常はオフの方が高速です。",
     )
     if st.button(
         "ローカル過去データでWalk-Forward検証を実行",
@@ -2198,11 +2317,11 @@ def _render_history_walk_forward() -> None:
     summary = walk_forward_summary(events, horizons=result_horizons)
     dates = pd.to_datetime(events.get("selection_date"), errors="coerce").dropna()
     m1, m2, m3, m4 = st.columns(4)
-    m1.metric("候補イベント", f"{len(events):,}件")
-    m2.metric("再現時点", f"{events.get('selection_date', pd.Series(dtype=str)).nunique():,}日")
-    m3.metric("検証期間", f"{dates.min().date()} ～ {dates.max().date()}" if not dates.empty else "-")
+    m1.metric("候補イベント", f"{len(events):,}件", help=_analysis_help("候補イベント"))
+    m2.metric("再現時点", f"{events.get('selection_date', pd.Series(dtype=str)).nunique():,}日", help=_analysis_help("再現時点"))
+    m3.metric("検証期間", f"{dates.min().date()} ～ {dates.max().date()}" if not dates.empty else "-", help=_analysis_help("検証期間"))
     coverage = pd.to_numeric(events.get("master_coverage_ratio"), errors="coerce").dropna()
-    m4.metric("会社マスター最低カバレッジ", f"{coverage.min() * 100:.1f}%" if not coverage.empty else "-")
+    m4.metric("会社マスター最低カバレッジ", f"{coverage.min() * 100:.1f}%" if not coverage.empty else "-", help=_analysis_help("会社マスター最低カバレッジ"))
     missing_master = pd.to_numeric(events.get("missing_master_code_count"), errors="coerce").fillna(0)
     if missing_master.gt(0).any():
         st.warning(
@@ -2215,7 +2334,7 @@ def _render_history_walk_forward() -> None:
         if col in display.columns:
             display[col] = pd.to_numeric(display[col], errors="coerce") * 100
     st.markdown("#### 現在ルールのWalk-Forward成績")
-    st.dataframe(display, width="stretch", hide_index=True)
+    _analysis_dataframe(display, width="stretch", hide_index=True)
     chart_cols = [c for c in ["候補平均", "類似非選択平均", "選択効果"] if c in display.columns]
     if chart_cols:
         st.bar_chart(display.set_index("期間")[chart_cols], width="stretch")
@@ -2230,18 +2349,18 @@ def _render_history_walk_forward() -> None:
         shown["平均リターン"] = pd.to_numeric(shown["平均リターン"], errors="coerce") * 100
         shown["プラス率"] = pd.to_numeric(shown["プラス率"], errors="coerce") * 100
         st.markdown("#### 外因説明率と30取引日後実績")
-        st.dataframe(shown, width="stretch", hide_index=True)
+        _analysis_dataframe(shown, width="stretch", hide_index=True)
         st.caption(
             "外因説明率は6カ月下落を『市場＋業種』と『企業固有』に分解した記述統計です。"
             "高いほど市場・業種の下落で説明できる割合が大きいことを示しますが、因果関係の証明ではありません。"
         )
 
-    if st.checkbox("Walk-Forwardイベント詳細を表示", value=False, key="wf_details"):
+    if st.checkbox("Walk-Forwardイベント詳細を表示", value=False, key="wf_details", help="過去の候補を選定日・銘柄単位で確認します。列名にマウスを置くと意味を表示します。"):
         details = events.copy()
         pct_cols = [c for c in details.columns if c.startswith(("return_", "control_return_", "selection_edge_"))]
         for col in pct_cols:
             details[col] = pd.to_numeric(details[col], errors="coerce") * 100
-        st.dataframe(details.sort_values(["selection_date", "code"], ascending=[False, True]), width="stretch", hide_index=True)
+        _analysis_dataframe(details.sort_values(["selection_date", "code"], ascending=[False, True]), width="stretch", hide_index=True)
 
 
 def render_history_and_validation() -> None:
@@ -2254,6 +2373,7 @@ def render_history_and_validation() -> None:
         default="日次分析履歴",
         selection_mode="single",
         label_visibility="collapsed",
+        help="表示する履歴・検証の種類を切り替えます。通常の切替では外部データを取得しません。",
         key="history_section",
     )
     evaluation_signature = _evaluation_history_signature()
@@ -2291,7 +2411,7 @@ def render_sbi_csv_import() -> None:
     st.success(f"{len(rows):,}銘柄を読み込みました。文字コード: {result.encoding}")
     for warning in result.warnings:
         st.warning(warning)
-    st.dataframe(rows, width="stretch", hide_index=True)
+    _analysis_dataframe(rows, width="stretch", hide_index=True)
     st.download_button("突合結果CSVをダウンロード", data=rows.to_csv(index=False).encode("utf-8-sig"), file_name="sbi_screening_matched.csv", mime="text/csv")
 
 def _candidate_records(matches: pd.DataFrame, max_items: int = 15) -> list[dict]:
@@ -2364,6 +2484,7 @@ def render_stock_search() -> None:
             "会社名または証券コード",
             placeholder="例: トヨタ / とよた / 7203 / 三菱UFJ",
             key="stock_query",
+            help="企業名の一部、読み方、4桁・5桁の証券コードで検索できます。複数候補は選択画面で確認します。",
         )
         submitted = st.form_submit_button("検索", type="primary")
 
@@ -2427,10 +2548,10 @@ def render_stock_search() -> None:
         latest_price = float(external_quote["price"])
         change = external_quote.get("change")
         change_pct = external_quote.get("change_pct")
-        quote_cols[0].metric("外部取得の最新株価", f"¥{latest_price:,.1f}", f"{change:+,.1f} ({change_pct:+.2%})" if change is not None and change_pct is not None else None)
-        quote_cols[1].metric("J-Quants分析終値", f"¥{_format_number(metrics.get('close'))}")
-        quote_cols[2].metric("外部株価の時刻", str(external_quote.get("market_time", "-"))[:19].replace("T", " "))
-        quote_cols[3].metric("外部データ元", "Yahoo Finance系")
+        quote_cols[0].metric("外部取得の最新株価", f"¥{latest_price:,.1f}", f"{change:+,.1f} ({change_pct:+.2%})" if change is not None and change_pct is not None else None, help="Yahoo Finance系から取得した参考用の最新株価です。注文前にはSBI証券で確認してください。")
+        quote_cols[1].metric("J-Quants分析終値", f"¥{_format_number(metrics.get('close'))}", help=_analysis_help("分析終値"))
+        quote_cols[2].metric("外部株価の時刻", str(external_quote.get("market_time", "-"))[:19].replace("T", " "), help="外部の株価情報が示す市場時刻です。遅延している場合があります。")
+        quote_cols[3].metric("外部データ元", "Yahoo Finance系", help="最新表示の取得元です。J-Quantsの分析スナップショットとは分離されています。")
         st.caption("外部取得値はYahoo Financeをyfinance経由で参照した非公式・遅延の可能性がある表示です。J-Quantsの分析スナップショットには混入させず、注文前にはSBI証券の現在値で再確認してください。")
     else:
         st.info("外部の最新株価を取得できなかったため、J-Quantsの分析終値を表示しています。" + (f" 詳細: {external_quote_error}" if external_quote_error else ""))
@@ -2490,12 +2611,13 @@ def render_stock_search() -> None:
         close_value = yield_price
         investment = float(close_value) * detail_shares if not pd.isna(close_value) else float("nan")
         amount_cols = st.columns(4)
-        amount_cols[0].metric("年間配当（税引前）", f"¥{gross_dividend:,.0f}")
-        amount_cols[1].metric("課税口座の概算受取額", f"¥{taxable_after_tax:,.0f}")
-        amount_cols[2].metric("NISAの概算受取額", f"¥{gross_dividend:,.0f}")
+        amount_cols[0].metric("年間配当（税引前）", f"¥{gross_dividend:,.0f}", help="1株当たり予想年間配当×入力した保有株数です。会社予想は変更される場合があります。")
+        amount_cols[1].metric("課税口座の概算受取額", f"¥{taxable_after_tax:,.0f}", help="税引前配当から20.315%を差し引いた概算です。実際の税額とは異なる場合があります。")
+        amount_cols[2].metric("NISAの概算受取額", f"¥{gross_dividend:,.0f}", help="NISA口座で国内配当が非課税となる前提の概算です。受取方式などの適用条件を確認してください。")
         amount_cols[3].metric(
             "概算投資額",
             f"¥{investment:,.0f}" if not pd.isna(investment) else "-",
+            help="表示株価×入力した株数で計算した参考金額です。手数料や実際の約定価格は含みません。",
         )
         st.caption(
             f"配当データ: {metrics.get('dividend_forecast_source', '-')} / "
@@ -2553,9 +2675,9 @@ def render_stock_search() -> None:
 
     summary_cols = st.columns(4)
     summary_cols[0].metric("定量根拠の充足度", f"{readiness['evidence_score']}%", help="利用可能な定量項目のうち、買付検討に有利な条件がどの程度揃っているかを重み付きで表した参考値です。将来の利益確率ではありません。")
-    summary_cols[1].metric("有利な材料", f"{len(readiness['positives'])}件")
-    summary_cols[2].metric("注意・不足", f"{len(readiness['warnings'])}件")
-    summary_cols[3].metric("反対材料", f"{len(readiness['failures'])}件")
+    summary_cols[1].metric("有利な材料", f"{len(readiness['positives'])}件", help="現在の取得済みデータで、買付検討を支える方向に働く確認項目数です。")
+    summary_cols[2].metric("注意・不足", f"{len(readiness['warnings'])}件", help="データ不足や追加の人手確認が必要な項目数です。")
+    summary_cols[3].metric("反対材料", f"{len(readiness['failures'])}件", help="現在の投資仮説に反する、または買付を止める方向の項目数です。")
 
     current_price_for_plan = float(external_quote["price"]) if external_quote and external_quote.get("price") else (float(jq_close) if not pd.isna(jq_close) else 0.0)
     entry_guidance = build_entry_price_guidance(current_price_for_plan, trend_snapshot, trend_transition)
@@ -2614,7 +2736,7 @@ def render_stock_search() -> None:
         {"種類": "過熱", "確認条件": "RSIが75超かつ急騰・大出来高", "意味": "一部利益確定を検討する材料"},
         {"種類": "損失管理", "確認条件": "事前に決めた最大損失額へ到達", "意味": "感情ではなく資金管理を優先"},
     ]
-    st.dataframe(pd.DataFrame(exit_rows), width="stretch", hide_index=True)
+    _analysis_dataframe(pd.DataFrame(exit_rows), width="stretch", hide_index=True)
 
     status_icon = {"pass": "✅", "warn": "⚠️", "fail": "❌", "unknown": "❓"}
     check_rows = [{
@@ -2622,7 +2744,7 @@ def render_stock_search() -> None:
         "確認項目": item["label"],
         "現在の内容": item["detail"],
     } for item in readiness["checks"]]
-    st.dataframe(pd.DataFrame(check_rows), width="stretch", hide_index=True)
+    _analysis_dataframe(pd.DataFrame(check_rows), width="stretch", hide_index=True)
 
     left_decision, right_decision = st.columns(2)
     with left_decision:
@@ -2899,7 +3021,11 @@ def render_stock_search() -> None:
     manual_cols = st.columns(2)
     for idx, (key, label_text) in enumerate(manual_items.items()):
         with manual_cols[idx % 2]:
-            manual_results[key] = st.checkbox(label_text, key=f"decision_{code_key}_{key}")
+            manual_results[key] = st.checkbox(
+                label_text,
+                key=f"decision_{code_key}_{key}",
+                help="自動判定できない重要事項です。実際に確認した場合だけチェックしてください。",
+            )
     manual_done = sum(bool(v) for v in manual_results.values())
     if manual_done == len(manual_results):
         st.success("注文前の人手確認がすべて完了しています。最終的な価格・数量・損失許容額を確認してください。")
@@ -2954,14 +3080,14 @@ def render_stock_search() -> None:
     st.markdown("### 分割買いの参考案")
     plan_col1, plan_col2, plan_col3 = st.columns(3)
     with plan_col1:
-        decision_budget = float(st.number_input("この銘柄への投資上限（円）", min_value=0, max_value=100_000_000, value=int(st.session_state.get(f"budget_{code_key}", 300_000)), step=50_000, key=f"budget_{code_key}"))
+        decision_budget = float(st.number_input("この銘柄への投資上限（円）", min_value=0, max_value=100_000_000, value=int(st.session_state.get(f"budget_{code_key}", 300_000)), step=50_000, key=f"budget_{code_key}", help="この銘柄へ投入してよいと自分で決めた最大金額です。買付推奨額ではありません。"))
     with plan_col2:
-        max_loss_pct = float(st.number_input("許容損失率（%）", min_value=1.0, max_value=50.0, value=15.0, step=1.0, key=f"loss_pct_{code_key}"))
+        max_loss_pct = float(st.number_input("許容損失率（%）", min_value=1.0, max_value=50.0, value=15.0, step=1.0, key=f"loss_pct_{code_key}", help="投資上限に対して、事前に許容すると決める最大損失率の目安です。"))
     with plan_col3:
-        st.metric("上限損失額の目安", f"¥{decision_budget * max_loss_pct / 100:,.0f}")
+        st.metric("上限損失額の目安", f"¥{decision_budget * max_loss_pct / 100:,.0f}", help="投資上限×許容損失率で計算した資金管理上の参考額です。")
     split_plan = build_split_entry_plan(current_price_for_plan, decision_budget)
     if split_plan:
-        st.dataframe(pd.DataFrame(split_plan), width="stretch", hide_index=True)
+        _analysis_dataframe(pd.DataFrame(split_plan), width="stretch", hide_index=True)
         if sum(int(row["株数"]) for row in split_plan) == 0:
             st.info("100株単位では投資上限内に収まりません。投資上限を増やすか、S株を別途検討してください。")
     else:
@@ -3008,7 +3134,7 @@ def render_stock_search() -> None:
             "actual_payout_ratio", "forecast_payout_ratio", "next_forecast_payout_ratio",
         ]
         available = [c for c in show_cols if c in financials.columns]
-        st.dataframe(
+        _analysis_dataframe(
             financials[available].sort_values("disclosure_date", ascending=False).head(12),
             width="stretch",
             hide_index=True,
@@ -3018,7 +3144,7 @@ def render_stock_search() -> None:
         if upcoming.empty:
             st.info("取得範囲に今後の決算発表予定はありません。")
         else:
-            st.dataframe(upcoming, width="stretch", hide_index=True)
+            _analysis_dataframe(upcoming, width="stretch", hide_index=True)
 
     st.markdown("#### アナリスト評価・目標株価")
     try:
@@ -3117,12 +3243,12 @@ def render_demo() -> None:
     orders_path = DEMO_OUTPUT / "order_proposals_latest.csv"
     if candidates_path.exists():
         st.subheader("デモ候補")
-        st.dataframe(pd.read_csv(candidates_path, dtype={"code": str}), width="stretch", hide_index=True)
+        _analysis_dataframe(pd.read_csv(candidates_path, dtype={"code": str}), width="stretch", hide_index=True)
     else:
         st.info("`run_demo.cmd` を実行するとデモ結果が生成されます。")
     if orders_path.exists():
         st.subheader("デモ注文案")
-        st.dataframe(pd.read_csv(orders_path, dtype={"code": str}), width="stretch", hide_index=True)
+        _analysis_dataframe(pd.read_csv(orders_path, dtype={"code": str}), width="stretch", hide_index=True)
 
 
 DATA_PAGE = st.Page(render_data_status_and_update, title="データ更新", icon=":material/sync:", default=True)

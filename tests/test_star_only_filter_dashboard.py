@@ -18,5 +18,5 @@ def test_star_only_filter_preserves_unfiltered_integrity_count():
     text = Path("dashboard.py").read_text(encoding="utf-8")
     assert "all_result = pd.DataFrame(rows)" in text
     assert "if len(all_result) != total:" in text
-    assert 'count_cols[1].metric("統合一覧", f"{len(all_result):,}")' in text
+    assert 'count_cols[1].metric("統合一覧", f"{len(all_result):,}",' in text
     assert "result = all_result.loc[star_mask].reset_index(drop=True)" in text
