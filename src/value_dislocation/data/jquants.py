@@ -15,6 +15,7 @@ from dateutil import tz
 from dotenv import load_dotenv
 
 from ..codes import normalize_tse_code
+from .security_master_history import archive_security_master
 from .snapshot import make_run_id, now_jst, write_dataframe, write_manifest
 
 
@@ -874,6 +875,12 @@ def fetch_and_curate_jquants(
     topix = normalize_topix(raw["topix"])
     financials = normalize_financials(raw["financials"])
     companies = normalize_companies(raw["master"], raw["financials"])
+    historical_master_path = archive_security_master(
+        project_root,
+        companies,
+        snapshot_date=resolved.effective_price_end,
+        run_id=run_id,
+    )
     prices = normalize_prices(raw["prices"], topix)
     earnings = normalize_earnings_calendar(raw["earnings"])
 
@@ -936,6 +943,11 @@ def fetch_and_curate_jquants(
         "warnings": fetch_warnings,
         "raw_files": raw_files,
         "curated_files": curated_files,
+        "historical_security_master": {
+            "path": historical_master_path.relative_to(project_root).as_posix(),
+            "snapshot_date": historical_master_path.name[:10],
+            "rows": int(len(companies)),
+        },
     }
     manifest_path = write_manifest(manifest, curated_run_dir / "manifest.json")
     shutil.copy2(manifest_path, curated_latest_dir / "manifest.json")

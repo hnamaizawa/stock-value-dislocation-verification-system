@@ -146,3 +146,14 @@
 - Risk: 値動きが大きいことは収益性を意味せず、損失拡大リスクも高い。画面上でも売買推奨ではないことを明示する。
 - UI: 分析ロジックと独立した「やわらかパステル」テーマを追加し、標準テーマとの切替を可能にする。
 - Blueprint: `harness/app_blueprint.yaml` の `non_negotiable_invariants` は変更しない。
+
+## ADR-017: Walk-Forwardは評価日以前の履歴銘柄マスターを使用する
+
+- 日付: 2026-09-23
+- 状態: Accepted
+- 背景: 現在のCompanyMasterだけで過去を再現すると、後に上場廃止となった銘柄が母集団から落ち、生存者バイアスが生じる。
+- Decision: J-Quants実データ更新ごとに日付別CompanyMasterを追記保存し、既存certified curated runからもAPIなしで復元する。Walk-Forwardは評価日以前で最新のマスターを選ぶ。
+- Fallback: 該当履歴がなければ現在マスターを使用するが、`universe_source`、利用可否、スナップショット日、経過日数、カバレッジ、警告を結果と画面へ明示する。
+- Limitation: 保存・復元された全マスターに存在しない銘柄は再構成できないため、生存者バイアスの完全排除とは表現しない。
+- Runtime: 履歴マスターは利用者固有の実データであり、同型アプリ生成物へコピーしない。
+- Guard: 履歴選択、certified run限定復元、上場廃止相当銘柄の再現、フォールバック開示を回帰テストとHarnessで固定する。

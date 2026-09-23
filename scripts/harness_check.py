@@ -391,9 +391,11 @@ def check_walk_forward_invariants(root: Path) -> CheckResult:
     cache_path = root / "src/value_dislocation/walkforward_cache.py"
     cache_tests_path = root / "tests/test_walkforward_cache.py"
     dashboard_path = root / "dashboard.py"
+    master_path = root / "src/value_dislocation/data/security_master_history.py"
+    master_tests_path = root / "tests/test_security_master_history.py"
     required_files = [
         validation_path, attribution_path, tests_path, docs_path,
-        cache_path, cache_tests_path, dashboard_path,
+        cache_path, cache_tests_path, dashboard_path, master_path, master_tests_path,
     ]
     missing_files = [str(path.relative_to(root)) for path in required_files if not path.exists()]
     validation = validation_path.read_text(encoding="utf-8") if validation_path.exists() else ""
@@ -401,6 +403,8 @@ def check_walk_forward_invariants(root: Path) -> CheckResult:
     cache = cache_path.read_text(encoding="utf-8") if cache_path.exists() else ""
     cache_tests = cache_tests_path.read_text(encoding="utf-8") if cache_tests_path.exists() else ""
     dashboard = dashboard_path.read_text(encoding="utf-8") if dashboard_path.exists() else ""
+    master = master_path.read_text(encoding="utf-8") if master_path.exists() else ""
+    master_tests = master_tests_path.read_text(encoding="utf-8") if master_tests_path.exists() else ""
     required_validation = [
         "_point_in_time_inputs",
         'future = g.loc[g["date"].dt.normalize() > anchor_day]',
@@ -414,6 +418,9 @@ def check_walk_forward_invariants(root: Path) -> CheckResult:
         "load_feature_cache",
         "save_feature_cache",
         "progress",
+        "historical_masters",
+        "master_snapshot_date",
+        "historical_master_available",
     ]
     required_tests = [
         "test_walk_forward_filters_future_inputs_before_selection",
@@ -438,6 +445,17 @@ def check_walk_forward_invariants(root: Path) -> CheckResult:
         '"簡易"', '"標準"', '"詳細"',
         "st.progress", "walk_forward_cache_key",
         "load_walk_forward_result", "保存済み結果を使わず再計算",
+        "load_security_master_history", "現在マスターで代用しています",
+    ]
+    required_master = [
+        "archive_security_master", "backfill_security_master_history",
+        "select_security_master_as_of", 'manifest.get("actual_data")',
+        'manifest.get("sample_data")', "snapshot.as_of <= cutoff",
+    ]
+    required_master_tests = [
+        "test_archive_load_and_select_master_on_or_before_replay_date",
+        "test_backfill_recovers_only_certified_actual_curated_runs",
+        "test_walk_forward_uses_historical_master_for_delisted_security",
     ]
     forbidden_fetch_terms = ["fetch_and_curate_jquants", "import yfinance", "from yfinance"]
     missing_validation = [term for term in required_validation if term not in validation]
@@ -445,11 +463,14 @@ def check_walk_forward_invariants(root: Path) -> CheckResult:
     missing_cache = [term for term in required_cache if term not in cache]
     missing_cache_tests = [term for term in required_cache_tests if term not in cache_tests]
     missing_dashboard = [term for term in required_dashboard if term not in dashboard]
+    missing_master = [term for term in required_master if term not in master]
+    missing_master_tests = [term for term in required_master_tests if term not in master_tests]
     forbidden_found = [term for term in forbidden_fetch_terms if term in validation]
     passed = (
         not missing_files and not missing_validation and not missing_tests
         and not missing_cache and not missing_cache_tests
-        and not missing_dashboard and not forbidden_found
+        and not missing_dashboard and not missing_master and not missing_master_tests
+        and not forbidden_found
     )
     return CheckResult(
         "walk_forward_invariants",
@@ -461,6 +482,8 @@ def check_walk_forward_invariants(root: Path) -> CheckResult:
             "missing_cache": missing_cache,
             "missing_cache_tests": missing_cache_tests,
             "missing_dashboard": missing_dashboard,
+            "missing_master": missing_master,
+            "missing_master_tests": missing_master_tests,
             "forbidden_fetch_terms": forbidden_found,
         }, ensure_ascii=False),
     )
@@ -487,6 +510,9 @@ def check_blueprint(root: Path) -> CheckResult:
         "walk_forward_validation_must_not_trigger_market_data_fetch",
         "walk_forward_horizons_must_use_trading_sessions",
         "walk_forward_must_report_survivorship_coverage",
+        "walk_forward_must_use_latest_historical_master_on_or_before_replay_date",
+        "historical_master_fallback_must_be_disclosed",
+        "historical_master_backfill_must_only_use_certified_actual_data",
         "walk_forward_cache_must_be_invalidated_by_data_config_and_version",
         "walk_forward_cached_features_must_remain_point_in_time",
         "walk_forward_progress_must_not_trigger_market_data_fetch",

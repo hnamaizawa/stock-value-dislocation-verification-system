@@ -24,6 +24,20 @@ manifestがない、壊れている、フラグが一致しない場合は検索
 
 `code,name,sector,sector33_code,market,master_date,shares_outstanding`
 
+## HistoricalSecurityMaster
+
+J-Quants実データ更新時のCompanyMasterを、`data/history/security_master/YYYY-MM-DD.csv.gz`
+へ日付別・追記型で保存する。既存のcertified curated runに残るCompanyMasterもAPIを
+呼ばずに復元する。sample dataまたはmanifestで実データと確認できないrunは復元対象外とする。
+
+元のCompanyMaster列に次を追加する。
+
+`security_master_snapshot_date,security_master_source_run_id`
+
+同名日付ファイルは上書きしない。隣接するJSONには`schema_version`、`snapshot_date`、
+`run_id`、`rows`を記録する。Walk-Forwardは評価日以前で最も新しいスナップショットを使い、
+存在しない場合だけ現在のCompanyMasterへフォールバックして、その事実を結果へ記録する。
+
 ## MarketDaily
 
 `date,code,open,high,low,close,volume,turnover_yen,adjustment_factor,topix_close`

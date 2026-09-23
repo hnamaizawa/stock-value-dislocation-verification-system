@@ -1,6 +1,6 @@
 schema_version: '1.0'
 blueprint_name: japanese-equity-value-dislocation-research
-blueprint_version: 0.6.66
+blueprint_version: 0.6.67
 canonical_project: stock-value-dislocation-verification-system
 purpose: Generate a local-first Japanese equity research application that retrieves
   actual market and financial data, searches listed companies, creates a quantitative
@@ -46,6 +46,9 @@ required_capabilities:
 - external_shock_attribution_decomposition
 - trading_session_forward_return_horizons
 - survivorship_coverage_audit
+- dated_historical_security_master_archive
+- certified_curated_master_backfill
+- historical_master_walk_forward_replay
 - persistent_walk_forward_result_cache
 - reusable_point_in_time_feature_cache
 - indexed_walk_forward_return_lookup
@@ -95,6 +98,9 @@ non_negotiable_invariants:
 - walk_forward_validation_must_not_trigger_market_data_fetch
 - walk_forward_horizons_must_use_trading_sessions
 - walk_forward_must_report_survivorship_coverage
+- walk_forward_must_use_latest_historical_master_on_or_before_replay_date
+- historical_master_fallback_must_be_disclosed
+- historical_master_backfill_must_only_use_certified_actual_data
 - walk_forward_cache_must_be_invalidated_by_data_config_and_version
 - walk_forward_cached_features_must_remain_point_in_time
 - walk_forward_progress_must_not_trigger_market_data_fetch
@@ -129,6 +135,7 @@ required_files:
 - scripts/generate_app.py
 - scripts/harness_check.py
 - src/value_dislocation/data/jquants.py
+- src/value_dislocation/data/security_master_history.py
 - src/value_dislocation/data/snapshot.py
 - src/value_dislocation/data/search.py
 - src/value_dislocation/real_pipeline.py
@@ -141,6 +148,7 @@ required_files:
 - src/value_dislocation/strategy/attribution.py
 - docs/20_WALK_FORWARD_VALIDATION.md
 - tests/test_walkforward_controls_attribution.py
+- tests/test_security_master_history.py
 - tests/test_walkforward_cache.py
 - tests/test_analysis_tooltips.py
 - src/value_dislocation/data/performance.py
@@ -163,6 +171,7 @@ runtime_state_exclusions:
 - data/reviews
 - data/portfolio
 - data/history/rule_learning
+- data/history/security_master
 - generated
 - config/user_profiles
 acceptance_commands:

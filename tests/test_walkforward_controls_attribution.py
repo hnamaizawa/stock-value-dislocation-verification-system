@@ -122,7 +122,7 @@ def test_walk_forward_filters_future_inputs_before_selection(monkeypatch):
     assert not events.empty
     assert observed["max_price"] <= observed["as_of"]
     assert observed["max_disclosure"] <= observed["as_of"]
-    assert events.iloc[0]["universe_source"].startswith("current_master")
+    assert events.iloc[0]["universe_source"].startswith("current_master_fallback")
 
 
 def test_walk_forward_module_has_no_market_fetch_dependency():
