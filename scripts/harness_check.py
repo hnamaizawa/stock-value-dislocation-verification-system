@@ -517,6 +517,8 @@ def check_blueprint(root: Path) -> CheckResult:
         "walk_forward_cached_features_must_remain_point_in_time",
         "walk_forward_progress_must_not_trigger_market_data_fetch",
         "analysis_help_must_not_change_scores_or_trigger_data_fetch",
+        "history_analytical_visuals_must_use_saved_local_data_only",
+        "history_visuals_must_disclose_confirmed_sample_size",
     }
     invariants = set(blueprint.get("non_negotiable_invariants", []))
     required_files = blueprint.get("required_files", [])
@@ -744,6 +746,49 @@ def check_analysis_tooltips(root: Path) -> CheckResult:
     )
 
 
+def check_history_analytical_visuals(root: Path) -> CheckResult:
+    dashboard_path = root / "dashboard.py"
+    module_path = root / "src/value_dislocation/history_visuals.py"
+    tests_path = root / "tests/test_history_analytical_visuals.py"
+    docs_path = root / "docs/22_HISTORY_ANALYTICAL_VISUALS.md"
+    required_files = [dashboard_path, module_path, tests_path, docs_path]
+    missing_files = [str(path.relative_to(root)) for path in required_files if not path.exists()]
+    dashboard = dashboard_path.read_text(encoding="utf-8") if dashboard_path.exists() else ""
+    module = module_path.read_text(encoding="utf-8") if module_path.exists() else ""
+    tests = tests_path.read_text(encoding="utf-8") if tests_path.exists() else ""
+    required_dashboard = [
+        "条件×期間ヒートマップ", "条件の成績バブル", "銘柄の期間比較バブル",
+        "go.Heatmap", "condition_outcome_bubbles", "security_return_bubbles",
+        "確定件数", "因果関係や将来利益を保証しません",
+    ]
+    required_module = [
+        "condition_return_heatmap", "condition_outcome_bubbles", "security_return_bubbles",
+        "比較可能件数", "return_",
+    ]
+    required_tests = [
+        "test_condition_heatmap_aligns_return_percent_and_confirmed_counts",
+        "test_condition_bubbles_expose_three_analysis_dimensions",
+        "test_security_bubbles_compare_two_horizons_and_size_by_star_count",
+        "test_dashboard_uses_local_analytical_visuals_without_fetch_dependency",
+    ]
+    missing_dashboard = [term for term in required_dashboard if term not in dashboard]
+    missing_module = [term for term in required_module if term not in module]
+    missing_tests = [term for term in required_tests if term not in tests]
+    forbidden_module = [term for term in ("fetch_", "yfinance", "jquants") if term in module.lower()]
+    passed = not missing_files and not missing_dashboard and not missing_module and not missing_tests and not forbidden_module
+    return CheckResult(
+        "history_analytical_visuals",
+        passed,
+        json.dumps({
+            "missing_files": missing_files,
+            "missing_dashboard": missing_dashboard,
+            "missing_module": missing_module,
+            "missing_tests": missing_tests,
+            "forbidden_module": forbidden_module,
+        }, ensure_ascii=False),
+    )
+
+
 def check_latest_trend_count_reconciliation(root: Path) -> CheckResult:
     dashboard = (root / "dashboard.py").read_text(encoding="utf-8")
     forbidden = [
@@ -892,6 +937,7 @@ def run_checks(root: Path, include_pytest: bool = True) -> list[CheckResult]:
         check_sbi_csv_bridge(root),
         check_translated_news_and_analyst_help(root),
         check_analysis_tooltips(root),
+        check_history_analytical_visuals(root),
         check_buy_decision_support(root),
         check_external_event_review_gate(root),
         check_walk_forward_invariants(root),
