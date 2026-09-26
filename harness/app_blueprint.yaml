@@ -1,6 +1,6 @@
 schema_version: '1.0'
 blueprint_name: japanese-equity-value-dislocation-research
-blueprint_version: 0.6.67
+blueprint_version: 0.6.68
 canonical_project: stock-value-dislocation-verification-system
 purpose: Generate a local-first Japanese equity research application that retrieves
   actual market and financial data, searches listed companies, creates a quantitative
@@ -56,6 +56,9 @@ required_capabilities:
 - walk_forward_quick_standard_detailed_modes
 - beginner_analysis_item_hover_help
 - analysis_table_column_hover_help
+- history_condition_horizon_heatmap
+- history_condition_outcome_bubble_chart
+- history_security_horizon_bubble_chart
 - legacy_vs_reversal_star_outcome_comparison
 - point_in_time_history_rule_learning
 - out_of_sample_rule_validation
@@ -105,6 +108,8 @@ non_negotiable_invariants:
 - walk_forward_cached_features_must_remain_point_in_time
 - walk_forward_progress_must_not_trigger_market_data_fetch
 - analysis_help_must_not_change_scores_or_trigger_data_fetch
+- history_analytical_visuals_must_use_saved_local_data_only
+- history_visuals_must_disclose_confirmed_sample_size
 - missing_structural_guard_metric_must_warn_not_fabricate_failure
 - legacy_star_eligibility_must_remain_comparable_after_rule_change
 - learned_rule_changes_must_not_trigger_market_data_fetch
@@ -144,6 +149,7 @@ required_files:
 - src/value_dislocation/strategy/profiles.py
 - src/value_dislocation/strategy/rule_learning.py
 - src/value_dislocation/validation.py
+- src/value_dislocation/history_visuals.py
 - src/value_dislocation/walkforward_cache.py
 - src/value_dislocation/strategy/attribution.py
 - docs/20_WALK_FORWARD_VALIDATION.md
@@ -158,6 +164,8 @@ required_files:
 - docs/17_BEGINNER_CONDITION_UI.md
 - docs/19_PERFORMANCE_OPTIMIZATION.md
 - docs/21_STRUCTURAL_DETERIORATION_GUARDS.md
+- docs/22_HISTORY_ANALYTICAL_VISUALS.md
+- tests/test_history_analytical_visuals.py
 runtime_state_exclusions:
 - .env
 - .venv
