@@ -62,7 +62,9 @@ def test_dashboard_uses_local_analytical_visuals_without_fetch_dependency():
     assert "銘柄の期間比較バブル" in dashboard
     assert "_render_history_analytical_visuals(star_events, perf)" in dashboard
     assert "go.Heatmap" in dashboard
-    assert dashboard.count("go.Scatter") >= 2
+    assert dashboard.count("go.Scatter") >= 4
+    assert "プラス率=%{customdata[0]:.1f}%" in dashboard
+    assert "確定件数=%{customdata[1]}" in dashboard
     assert "fetch_" not in module
     assert "yfinance" not in module.lower()
     assert "jquants" not in module.lower()

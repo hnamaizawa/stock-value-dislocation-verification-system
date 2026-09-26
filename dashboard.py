@@ -715,6 +715,7 @@ def _render_trend_price_chart(
         margin={"l": 20, "r": 20, "t": 70, "b": 20}, height=500,
     )
     st.plotly_chart(fig, width="stretch", config={"displaylogo": False})
+    st.caption("太線が株価、20日線＝短期、50日線＝中期、200日線＝長期の目安です。価格帯やラインは参考表示で、注文指示ではありません。")
 
 
 def _render_history_analytical_visuals(star_events: pd.DataFrame, perf: pd.DataFrame) -> None:
@@ -731,8 +732,8 @@ def _render_history_analytical_visuals(star_events: pd.DataFrame, perf: pd.DataF
         "保存済み履歴だけを組み合わせて、条件・期間・リターン・プラス率・確定件数の関係を可視化します。"
         "円が大きいほど観測件数が多いことを表します。相関や傾向であり、因果関係や将来利益を保証しません。"
     )
-    heat_tab, condition_tab, security_tab = st.tabs(
-        ["条件×期間ヒートマップ", "条件の成績バブル", "銘柄の期間比較バブル"]
+    heat_tab, security_tab = st.tabs(
+        ["条件×期間ヒートマップ", "銘柄の期間比較バブル"]
     )
 
     with heat_tab:
@@ -784,50 +785,6 @@ def _render_history_analytical_visuals(star_events: pd.DataFrame, perf: pd.DataF
                 )
                 st.plotly_chart(fig, width="stretch", config={"displaylogo": False})
                 st.caption("緑は平均プラス、赤は平均マイナスです。各マスの n はその期間まで実績が確定したイベント数です。")
-
-    with condition_tab:
-        horizon = st.segmented_control(
-            "比較期間",
-            [f"{h}日" for h in STAR_OUTCOME_HORIZONS],
-            default="90日",
-            key="history_condition_bubble_horizon",
-            help="条件成立後、何取引日後の実績を比較するか選びます。",
-        )
-        horizon_days = int(str(horizon).removesuffix("日"))
-        bubbles = condition_outcome_bubbles(perf, horizon_days)
-        if bubbles.empty:
-            st.info("この期間の条件別確定実績がまだありません。")
-        else:
-            sizes = 12 + np.sqrt(bubbles["確定件数"].clip(lower=1)) * 7
-            fig = go.Figure(go.Scatter(
-                x=bubbles["平均リターン(%)"],
-                y=bubbles["プラス率(%)"],
-                mode="markers+text",
-                text=bubbles["条件"],
-                textposition="top center",
-                customdata=np.column_stack([bubbles["条件"], bubbles["確定件数"]]),
-                marker={
-                    "size": sizes,
-                    "color": bubbles["平均リターン(%)"],
-                    "colorscale": "RdYlGn",
-                    "cmid": 0,
-                    "showscale": True,
-                    "colorbar": {"title": "平均%"},
-                    "line": {"width": 1, "color": "#666"},
-                    "opacity": 0.82,
-                },
-                hovertemplate="条件=%{customdata[0]}<br>平均=%{x:+.2f}%<br>プラス率=%{y:.1f}%<br>確定件数=%{customdata[1]}<extra></extra>",
-            ))
-            fig.add_vline(x=0, line_dash="dash", line_color="#777")
-            fig.add_hline(y=50, line_dash="dash", line_color="#777")
-            fig.update_layout(
-                height=540,
-                margin={"l": 20, "r": 20, "t": 25, "b": 20},
-                xaxis_title=f"{horizon_days}取引日後の平均リターン（%）",
-                yaxis_title="プラスになった割合（%）",
-            )
-            st.plotly_chart(fig, width="stretch", config={"displaylogo": False})
-            st.caption("右上ほど平均リターンと勝率がともに高い領域です。ただし、小さい円は確定件数が少ないため慎重に解釈してください。")
 
     with security_tab:
         c1, c2 = st.columns(2)
@@ -883,7 +840,114 @@ def _render_history_analytical_visuals(star_events: pd.DataFrame, perf: pd.DataF
             )
             st.plotly_chart(fig, width="stretch", config={"displaylogo": False})
             st.caption("右上は両期間とも平均プラス、左上は短期下落後に中長期で回復、右下は短期上昇後に失速した領域です。円の大きさは◎☆回数です。")
-    st.caption("太線が株価、20日線＝短期、50日線＝中期、200日線＝長期の目安です。価格帯やラインは参考表示で、注文指示ではありません。")
+
+
+def _render_horizon_performance_bubbles(forward_chart: pd.DataFrame) -> None:
+    """Show return, positive rate, and sample size across outcome horizons."""
+    if forward_chart is None or forward_chart.empty:
+        return
+    frame = forward_chart.reset_index().copy()
+    required = {"期間", "平均リターン(%)", "プラス率(%)", "確定件数"}
+    if not required.issubset(frame.columns):
+        return
+    frame["平均リターン(%)"] = pd.to_numeric(frame["平均リターン(%)"], errors="coerce")
+    frame["プラス率(%)"] = pd.to_numeric(frame["プラス率(%)"], errors="coerce")
+    frame["確定件数"] = pd.to_numeric(frame["確定件数"], errors="coerce").fillna(0).astype(int)
+    frame["取引日数"] = pd.to_numeric(frame["期間"].astype(str).str.replace("日", "", regex=False), errors="coerce")
+    frame = frame.loc[
+        frame["平均リターン(%)"].notna()
+        & frame["プラス率(%)"].notna()
+        & frame["取引日数"].notna()
+        & frame["確定件数"].gt(0)
+    ].sort_values("取引日数")
+    if frame.empty:
+        return
+    try:
+        import numpy as np
+        import plotly.graph_objects as go
+    except ImportError:
+        st.info("期間別の多軸グラフ表示にはPlotlyが必要です。")
+        return
+    sizes = 14 + np.sqrt(frame["確定件数"].clip(lower=1)) * 8
+    fig = go.Figure(go.Scatter(
+        x=frame["取引日数"],
+        y=frame["平均リターン(%)"],
+        mode="lines+markers+text",
+        text=frame["期間"],
+        textposition="top center",
+        customdata=np.column_stack([frame["プラス率(%)"], frame["確定件数"]]),
+        line={"width": 2, "color": "#7386d5"},
+        marker={
+            "size": sizes,
+            "color": frame["プラス率(%)"],
+            "colorscale": "RdYlGn",
+            "cmin": 0,
+            "cmax": 100,
+            "showscale": True,
+            "colorbar": {"title": "プラス率%"},
+            "line": {"width": 1, "color": "#555"},
+            "opacity": 0.85,
+        },
+        hovertemplate=(
+            "%{x:.0f}取引日後<br>平均リターン=%{y:+.2f}%<br>"
+            "プラス率=%{customdata[0]:.1f}%<br>確定件数=%{customdata[1]}<extra></extra>"
+        ),
+    ))
+    fig.add_hline(y=0, line_dash="dash", line_color="#777")
+    fig.update_layout(
+        height=510,
+        margin={"l": 20, "r": 20, "t": 25, "b": 20},
+        xaxis_title="◎☆判定後の取引日数",
+        yaxis_title="平均リターン（%）",
+        xaxis={"tickmode": "array", "tickvals": frame["取引日数"], "ticktext": frame["期間"]},
+    )
+    st.plotly_chart(fig, width="stretch", config={"displaylogo": False})
+
+
+def _render_condition_performance_bubbles(perf: pd.DataFrame, horizon_days: int) -> None:
+    """Show return, positive rate, and confirmed count for one condition horizon."""
+    bubbles = condition_outcome_bubbles(perf, horizon_days)
+    if bubbles.empty:
+        st.info("選択した期間の条件別確定実績がまだありません。")
+        return
+    try:
+        import numpy as np
+        import plotly.graph_objects as go
+    except ImportError:
+        st.info("条件別の多軸グラフ表示にはPlotlyが必要です。")
+        return
+    sizes = 14 + np.sqrt(bubbles["確定件数"].clip(lower=1)) * 8
+    fig = go.Figure(go.Scatter(
+        x=bubbles["平均リターン(%)"],
+        y=bubbles["プラス率(%)"],
+        mode="markers+text",
+        text=bubbles["条件"],
+        textposition="top center",
+        customdata=np.column_stack([bubbles["条件"], bubbles["確定件数"]]),
+        marker={
+            "size": sizes,
+            "color": bubbles["平均リターン(%)"],
+            "colorscale": "RdYlGn",
+            "cmid": 0,
+            "showscale": True,
+            "colorbar": {"title": "平均%"},
+            "line": {"width": 1, "color": "#555"},
+            "opacity": 0.84,
+        },
+        hovertemplate=(
+            "条件=%{customdata[0]}<br>平均リターン=%{x:+.2f}%<br>"
+            "プラス率=%{y:.1f}%<br>確定件数=%{customdata[1]}<extra></extra>"
+        ),
+    ))
+    fig.add_vline(x=0, line_dash="dash", line_color="#777")
+    fig.add_hline(y=50, line_dash="dash", line_color="#777")
+    fig.update_layout(
+        height=550,
+        margin={"l": 20, "r": 20, "t": 25, "b": 20},
+        xaxis_title=f"{horizon_days}取引日後の平均リターン（%）",
+        yaxis_title="プラスになった割合（%）",
+    )
+    st.plotly_chart(fig, width="stretch", config={"displaylogo": False})
 
 
 @st.cache_resource(show_spinner=False, max_entries=2)
@@ -2262,11 +2326,15 @@ def _render_history_star_validation(evaluation: pd.DataFrame) -> None:
     all_analysis_signature = _analysis_history_signature(None, None)
     perf = _cached_condition_performance(str(ROOT), all_analysis_signature, _star_outcomes_signature())
     _render_history_analysis_summary(star_validation_text_summary(star_events, forward_chart, perf))
-    matured_chart = forward_chart.loc[forward_chart["確定件数"] > 0, ["平均リターン(%)"]] if not forward_chart.empty else pd.DataFrame()
-    if not matured_chart.empty:
-        st.markdown("#### 可視化：◎☆後の平均リターン")
-        st.caption("実績が確定した◎☆開始イベントだけを使った10/20/30/60/90/180日後の平均リターンです。未確定イベントは含みません。")
-        st.bar_chart(matured_chart, width="stretch")
+    if not forward_chart.empty and pd.to_numeric(
+        forward_chart.get("確定件数", pd.Series(dtype=float)), errors="coerce"
+    ).fillna(0).gt(0).any():
+        st.markdown("#### 可視化：◎☆後の期間別成績（リターン・プラス率・確定件数）")
+        st.caption(
+            "横軸は判定後の取引日数、縦軸は平均リターン、色はプラス率、円の大きさは確定件数です。"
+            "線の傾きで、短期から中長期へ成績が改善したか失速したかを確認できます。"
+        )
+        _render_horizon_performance_bubbles(forward_chart)
 
     _render_history_analytical_visuals(star_events, perf)
 
@@ -2318,20 +2386,13 @@ def _render_history_star_validation(evaluation: pd.DataFrame) -> None:
             key="history_condition_chart_horizon",
             help="条件ごとの平均リターンを比較する、選定後の取引日数を選びます。",
         )
-        avg_col = f"{horizon}平均"
-        count_col = f"{horizon}確定件数"
-        if avg_col in display.columns:
-            chart_cols = ["条件", avg_col] + ([count_col] if count_col in display.columns else [])
-            condition_chart = display[chart_cols].copy()
-            condition_chart[avg_col] = pd.to_numeric(condition_chart[avg_col], errors="coerce")
-            if count_col in condition_chart.columns:
-                condition_chart[count_col] = pd.to_numeric(condition_chart[count_col], errors="coerce").fillna(0)
-                condition_chart = condition_chart.loc[condition_chart[count_col] > 0]
-            condition_chart = condition_chart.dropna(subset=[avg_col]).sort_values(avg_col, ascending=False)
-            if not condition_chart.empty:
-                st.markdown(f"#### 可視化：条件別{horizon}平均リターン")
-                st.caption("条件ごとの平均リターンを比較します。確定件数が少ない条件は表の件数も併せて確認してください。因果関係を示すものではありません。")
-                st.bar_chart(condition_chart.set_index("条件")[[avg_col]], width="stretch")
+        horizon_days = int(str(horizon).removesuffix("日"))
+        st.markdown(f"#### 条件の成績バブル：{horizon}（リターン・プラス率・確定件数）")
+        st.caption(
+            "横軸は平均リターン、縦軸はプラス率、円の大きさは確定件数です。"
+            "右上かつ大きい円ほど、成績と観測数の両面で注目できます。相関傾向であり因果関係ではありません。"
+        )
+        _render_condition_performance_bubbles(perf, horizon_days)
 
 
 def _walk_forward_data_signature() -> str:

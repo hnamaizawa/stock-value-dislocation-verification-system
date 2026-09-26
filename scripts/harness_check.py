@@ -519,6 +519,7 @@ def check_blueprint(root: Path) -> CheckResult:
         "analysis_help_must_not_change_scores_or_trigger_data_fetch",
         "history_analytical_visuals_must_use_saved_local_data_only",
         "history_visuals_must_disclose_confirmed_sample_size",
+        "history_performance_charts_must_show_return_positive_rate_and_count",
     }
     invariants = set(blueprint.get("non_negotiable_invariants", []))
     required_files = blueprint.get("required_files", [])
@@ -759,7 +760,8 @@ def check_history_analytical_visuals(root: Path) -> CheckResult:
     required_dashboard = [
         "条件×期間ヒートマップ", "条件の成績バブル", "銘柄の期間比較バブル",
         "go.Heatmap", "condition_outcome_bubbles", "security_return_bubbles",
-        "確定件数", "因果関係や将来利益を保証しません",
+        "_render_horizon_performance_bubbles", "_render_condition_performance_bubbles",
+        "lines+markers+text", "プラス率", "確定件数", "因果関係や将来利益を保証しません",
     ]
     required_module = [
         "condition_return_heatmap", "condition_outcome_bubbles", "security_return_bubbles",
@@ -775,7 +777,16 @@ def check_history_analytical_visuals(root: Path) -> CheckResult:
     missing_module = [term for term in required_module if term not in module]
     missing_tests = [term for term in required_tests if term not in tests]
     forbidden_module = [term for term in ("fetch_", "yfinance", "jquants") if term in module.lower()]
-    passed = not missing_files and not missing_dashboard and not missing_module and not missing_tests and not forbidden_module
+    forbidden_dashboard = [
+        term for term in (
+            "st.bar_chart(matured_chart",
+            'st.bar_chart(condition_chart.set_index("条件")',
+        ) if term in dashboard
+    ]
+    passed = (
+        not missing_files and not missing_dashboard and not missing_module
+        and not missing_tests and not forbidden_module and not forbidden_dashboard
+    )
     return CheckResult(
         "history_analytical_visuals",
         passed,
@@ -785,6 +796,7 @@ def check_history_analytical_visuals(root: Path) -> CheckResult:
             "missing_module": missing_module,
             "missing_tests": missing_tests,
             "forbidden_module": forbidden_module,
+            "forbidden_dashboard": forbidden_dashboard,
         }, ensure_ascii=False),
     )
 
