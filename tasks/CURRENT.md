@@ -289,3 +289,12 @@ Version 0.5.1 implements the immediate performance and SBI CSV bridge improvemen
 - [x] 2期間比較は両期間が確定した同一イベントだけを使う
 - [x] 少数観測への注意と確定件数を表示する
 - [x] 外部取得を誘発しない回帰テストとHarness契約を追加する
+
+
+## v0.6.69 replace simple outcome bars
+
+- [x] ◎☆後の平均リターン縦棒を4要素の推移バブル図へ置換する
+- [x] 条件別平均リターン縦棒を3要素の条件バブル図へ置換する
+- [x] 条件バブルの重複表示を解消する
+- [x] 色・円サイズ・基準線・ホバーの読み方を画面で説明する
+- [x] 単純な実績棒グラフへ戻らない回帰テストとHarness契約を追加する

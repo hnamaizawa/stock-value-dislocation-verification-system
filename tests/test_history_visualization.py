@@ -41,12 +41,14 @@ def test_history_dashboard_has_visualizations_without_extra_fetch_paths():
     text = Path("dashboard.py").read_text(encoding="utf-8")
     assert '可視化：当日の最終評価件数の推移' in text
     assert '可視化：最終評価の構成' in text
-    assert '可視化：◎☆後の平均リターン' in text
-    assert '可視化：条件別{horizon}平均リターン' in text
+    assert '可視化：◎☆後の期間別成績（リターン・プラス率・確定件数）' in text
+    assert '条件の成績バブル：{horizon}（リターン・プラス率・確定件数）' in text
     assert 'daily_evaluation_counts(hist)' in text
     assert 'evaluation_symbol_counts(e)' in text
     assert 'star_forward_return_summary(star_events)' in text
     assert 'st.line_chart(daily_chart' in text
     assert 'st.bar_chart(symbol_chart' in text
-    assert 'st.bar_chart(matured_chart' in text
-    assert 'st.bar_chart(condition_chart.set_index("条件")' in text
+    assert '_render_horizon_performance_bubbles(forward_chart)' in text
+    assert '_render_condition_performance_bubbles(perf, horizon_days)' in text
+    assert 'st.bar_chart(matured_chart' not in text
+    assert 'st.bar_chart(condition_chart.set_index("条件")' not in text
