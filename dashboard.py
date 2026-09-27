@@ -950,6 +950,57 @@ def _render_condition_performance_bubbles(perf: pd.DataFrame, horizon_days: int)
     st.plotly_chart(fig, width="stretch", config={"displaylogo": False})
 
 
+def _render_walk_forward_comparison_chart(summary: pd.DataFrame) -> None:
+    """Compare selected/control returns without stacking the derived selection edge."""
+    required = {"期間", "候補平均", "類似非選択平均", "選択効果"}
+    if summary is None or summary.empty or not required.issubset(summary.columns):
+        return
+    frame = summary[list(required)].copy()
+    for column in required - {"期間"}:
+        frame[column] = pd.to_numeric(frame[column], errors="coerce")
+    if frame[["候補平均", "類似非選択平均", "選択効果"]].notna().sum().sum() == 0:
+        return
+    try:
+        import plotly.graph_objects as go
+    except ImportError:
+        st.info("Walk-Forward比較グラフの表示にはPlotlyが必要です。")
+        return
+
+    fig = go.Figure()
+    for column, color in (("候補平均", "#2878c8"), ("類似非選択平均", "#ef6a67")):
+        fig.add_trace(go.Bar(
+            name=column,
+            x=frame["期間"],
+            y=frame[column],
+            marker_color=color,
+            text=frame[column].map(lambda value: f"{value:+.2f}%" if pd.notna(value) else ""),
+            textposition="outside",
+            hovertemplate=f"%{{x}}<br>{column}=%{{y:+.2f}}%<extra></extra>",
+        ))
+    fig.add_trace(go.Scatter(
+        name="選択効果（候補−類似非選択）",
+        x=frame["期間"],
+        y=frame["選択効果"],
+        mode="lines+markers+text",
+        line={"color": "#5b3f9b", "width": 2, "dash": "dot"},
+        marker={"symbol": "diamond", "size": 12, "color": "#5b3f9b"},
+        text=frame["選択効果"].map(lambda value: f"{value:+.2f}pt" if pd.notna(value) else ""),
+        textposition="bottom center",
+        hovertemplate="%{x}<br>選択効果=%{y:+.2f}ポイント<extra></extra>",
+    ))
+    fig.add_hline(y=0, line_dash="dash", line_color="#666")
+    fig.update_layout(
+        barmode="group",
+        height=500,
+        margin={"l": 20, "r": 20, "t": 35, "b": 20},
+        xaxis_title="候補選定後の取引日数",
+        yaxis_title="平均リターン／選択効果（%・ポイント）",
+        legend={"orientation": "h", "yanchor": "bottom", "y": 1.02, "xanchor": "left", "x": 0},
+        hovermode="x unified",
+    )
+    st.plotly_chart(fig, width="stretch", config={"displaylogo": False})
+
+
 @st.cache_resource(show_spinner=False, max_entries=2)
 def _load_bundle(manifest_mtime_ns: int) -> dict:
     # The curated market bundle can contain millions of price rows. cache_resource
@@ -2591,12 +2642,11 @@ def _render_history_walk_forward() -> None:
             display[col] = pd.to_numeric(display[col], errors="coerce") * 100
     st.markdown("#### 現在ルールのWalk-Forward成績")
     _analysis_dataframe(display, width="stretch", hide_index=True)
-    chart_cols = [c for c in ["候補平均", "類似非選択平均", "選択効果"] if c in display.columns]
-    if chart_cols:
-        st.bar_chart(display.set_index("期間")[chart_cols], width="stretch")
+    _render_walk_forward_comparison_chart(display)
     st.caption(
         "選択効果 = 選ばれた候補の実績 − 類似していた非選択銘柄の平均実績。"
-        "市場全体が上昇しただけなのか、選択ロジック自体に上乗せ効果があったのかを確認します。"
+        "青と赤の棒は横並びで比較し、紫の菱形は両者の差を表します。各系列は積み上げていません。"
+        "0%線より上ならプラス、選択効果が0より上なら候補が比較銘柄を上回ったことを示します。"
     )
 
     attribution = attribution_outcome_summary(events, horizon_days=30)
