@@ -520,6 +520,7 @@ def check_blueprint(root: Path) -> CheckResult:
         "history_analytical_visuals_must_use_saved_local_data_only",
         "history_visuals_must_disclose_confirmed_sample_size",
         "history_performance_charts_must_show_return_positive_rate_and_count",
+        "walk_forward_comparison_chart_must_not_stack_derived_selection_edge",
     }
     invariants = set(blueprint.get("non_negotiable_invariants", []))
     required_files = blueprint.get("required_files", [])

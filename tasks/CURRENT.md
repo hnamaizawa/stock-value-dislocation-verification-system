@@ -1,3 +1,10 @@
+## v0.6.70 Walk-Forward comparison chart
+
+- [x] 候補平均と類似非選択平均を0%基準の横並び棒で表示する
+- [x] 派生値の選択効果を積み上げず、独立した点／線で表示する
+- [x] 値ラベル、ホバー、0%基準線、読み方の説明を追加する
+- [x] 非積み上げ表示をHarnessと回帰テストで固定する
+
 ## v0.6.63 walk-forward / matched controls / attribution
 
 - [x] point-in-time Walk-Forward検証を追加する。
