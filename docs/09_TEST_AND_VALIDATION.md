@@ -19,6 +19,9 @@
 - blueprint必須項目
 - generatorが秘密・runtime stateをコピーしないこと
 - compileall、pytest、generator self-test
+- Walk-Forwardの定量候補／旧◎☆／反転確認済み◎☆の包含関係と頑健統計
+- 反転確認済み◎☆だけを対象にした即時／3日待機／5日待機比較
+- 待機中の将来価格が候補資格へ混入しないHarness不変条件
 
 ## 実アカウントで必要な検証
 

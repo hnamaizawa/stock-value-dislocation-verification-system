@@ -3,12 +3,14 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-from value_dislocation.strategy.attribution import add_external_shock_attribution
 from value_dislocation import validation
+from value_dislocation.strategy.attribution import add_external_shock_attribution
 from value_dislocation.validation import (
     WalkForwardConfig,
     _forward_return,
     matched_controls,
+    walk_forward_cohort_summary,
+    walk_forward_entry_timing_summary,
     walk_forward_summary,
     walk_forward_validation,
 )
@@ -61,6 +63,41 @@ def test_walk_forward_summary_reports_selection_edge():
     assert np.isclose(row["選択効果プラス率"], 1.0)
 
 
+def test_walk_forward_compares_nested_star_cohorts_with_robust_metrics():
+    events = pd.DataFrame([
+        {"return_30d": 0.10, "legacy_star_eligible": True, "reversal_star_eligible": True},
+        {"return_30d": -0.06, "legacy_star_eligible": True, "reversal_star_eligible": False},
+        {"return_30d": 0.02, "legacy_star_eligible": False, "reversal_star_eligible": False},
+    ])
+    result = walk_forward_cohort_summary(events, horizon_days=30).set_index("判定段階")
+    assert result.loc["定量候補全体", "確定件数"] == 3
+    assert result.loc["旧◎☆条件", "確定件数"] == 2
+    assert result.loc["反転確認済み◎☆", "確定件数"] == 1
+    assert np.isclose(result.loc["旧◎☆条件", "中央値"], 0.02)
+    assert np.isclose(result.loc["旧◎☆条件", "5%以上下落率"], 0.5)
+
+
+def test_walk_forward_entry_timing_uses_only_reversal_star_events():
+    events = pd.DataFrame([
+        {
+            "reversal_star_eligible": True,
+            "return_30d": 0.10,
+            "return_30d_entry_delay_3d": 0.07,
+            "return_30d_entry_delay_5d": -0.06,
+        },
+        {
+            "reversal_star_eligible": False,
+            "return_30d": -0.50,
+            "return_30d_entry_delay_3d": -0.50,
+            "return_30d_entry_delay_5d": -0.50,
+        },
+    ])
+    result = walk_forward_entry_timing_summary(events, horizon_days=30).set_index("買付タイミング")
+    assert np.isclose(result.loc["選定日終値", "平均リターン"], 0.10)
+    assert np.isclose(result.loc["3取引日待機", "平均リターン"], 0.07)
+    assert np.isclose(result.loc["5取引日待機", "5%以上下落率"], 1.0)
+
+
 def test_matched_controls_backfills_same_market_after_sector_priority():
     universe = pd.DataFrame([
         {"code": "A", "sector": "Tech", "market": "Prime", "selected_for_review": True, "market_cap": 100, "drawdown_52w": -0.2, "volatility_60d": 0.3, "per_vs_sector": 1.0, "pbr_vs_sector": 1.0},
@@ -109,8 +146,21 @@ def test_walk_forward_filters_future_inputs_before_selection(monkeypatch):
         out["selected_for_review"] = True
         return out
 
+    def fake_readiness(metrics, **kwargs):
+        observed["trend_latest_price"] = kwargs["trend"].get("latest_price")
+        return {"evidence_score": 90, "checks": [], "decision_level": "consider"}
+
+    def fake_signal(readiness, transition):
+        observed["signal_current_price"] = transition["current"].get("latest_price")
+        return {
+            "symbol": "◎☆", "legacy_star": True, "reversal_star": True,
+            "star_rule_version": "test",
+        }
+
     monkeypatch.setattr(validation, "prepare_quantitative_universe", fake_prepare)
     monkeypatch.setattr(validation, "apply_quantitative_criteria", fake_apply)
+    monkeypatch.setattr(validation, "build_buy_readiness", fake_readiness)
+    monkeypatch.setattr(validation, "build_intuitive_signal", fake_signal)
     events = walk_forward_validation(
         companies, prices, financials, {},
         settings=WalkForwardConfig(
@@ -122,6 +172,10 @@ def test_walk_forward_filters_future_inputs_before_selection(monkeypatch):
     assert not events.empty
     assert observed["max_price"] <= observed["as_of"]
     assert observed["max_disclosure"] <= observed["as_of"]
+    expected_latest = float(prices.loc[prices["date"] <= observed["as_of"], "close"].iloc[-1])
+    assert observed["trend_latest_price"] == expected_latest
+    assert observed["signal_current_price"] == expected_latest
+    assert bool(events.iloc[0]["reversal_star_eligible"])
     assert events.iloc[0]["universe_source"].startswith("current_master_fallback")
 
 

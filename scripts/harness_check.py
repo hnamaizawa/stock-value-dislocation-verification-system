@@ -421,12 +421,19 @@ def check_walk_forward_invariants(root: Path) -> CheckResult:
         "historical_masters",
         "master_snapshot_date",
         "historical_master_available",
+        "build_buy_readiness",
+        "build_intuitive_signal",
+        "walk_forward_cohort_summary",
+        "walk_forward_entry_timing_summary",
+        "entry_delay_trading_days",
     ]
     required_tests = [
         "test_walk_forward_filters_future_inputs_before_selection",
         "test_forward_return_uses_trading_sessions_not_calendar_days",
         "test_matched_controls_backfills_same_market_after_sector_priority",
         "test_walk_forward_module_has_no_market_fetch_dependency",
+        "test_walk_forward_compares_nested_star_cohorts_with_robust_metrics",
+        "test_walk_forward_entry_timing_uses_only_reversal_star_events",
     ]
     required_cache = [
         "walk_forward_cache_key",
@@ -446,6 +453,7 @@ def check_walk_forward_invariants(root: Path) -> CheckResult:
         "st.progress", "walk_forward_cache_key",
         "load_walk_forward_result", "保存済み結果を使わず再計算",
         "load_security_master_history", "現在マスターで代用しています",
+        "判定段階別の成績", "反転確認済み◎☆の買付タイミング比較",
     ]
     required_master = [
         "archive_security_master", "backfill_security_master_history",
@@ -521,6 +529,8 @@ def check_blueprint(root: Path) -> CheckResult:
         "history_visuals_must_disclose_confirmed_sample_size",
         "history_performance_charts_must_show_return_positive_rate_and_count",
         "walk_forward_comparison_chart_must_not_stack_derived_selection_edge",
+        "walk_forward_star_cohorts_must_use_production_badge_functions",
+        "walk_forward_delayed_entry_must_not_change_selection_eligibility",
     }
     invariants = set(blueprint.get("non_negotiable_invariants", []))
     required_files = blueprint.get("required_files", [])
