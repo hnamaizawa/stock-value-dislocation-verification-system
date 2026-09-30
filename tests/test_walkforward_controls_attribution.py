@@ -116,6 +116,43 @@ def test_walk_forward_horizon_support_boundary_and_empty_history():
     assert supported_walk_forward_horizons(pd.DataFrame(), (10,)) == ()
 
 
+def test_walk_forward_reports_point_in_time_rejection_diagnostics(monkeypatch):
+    dates = pd.bdate_range("2026-01-05", periods=15)
+    prices = pd.DataFrame({"code": ["A"] * len(dates), "date": dates, "close": 100.0})
+    financials = pd.DataFrame([{"code": "A", "disclosure_date": dates[0]}])
+    companies = pd.DataFrame([{"code": "A", "name": "A社", "sector": "Tech", "market": "Prime"}])
+
+    def fake_prepare(c, p, f, as_of):
+        return pd.DataFrame([{
+            "code": "A", "name": "A社", "sector": "Tech", "market": "Prime", "close": 100.0,
+        }])
+
+    def fake_apply(prepared, config):
+        out = prepared.copy()
+        out["selected_for_review"] = False
+        out["fail_reasons"] = "営業黒字 / 自己資本比率"
+        return out
+
+    monkeypatch.setattr(validation, "prepare_quantitative_universe", fake_prepare)
+    monkeypatch.setattr(validation, "apply_quantitative_criteria", fake_apply)
+    diagnostics = []
+    events = walk_forward_validation(
+        companies, prices, financials, {},
+        settings=WalkForwardConfig(
+            max_snapshots=1, spacing_trading_days=1,
+            controls_per_event=1, minimum_history_trading_days=1,
+        ),
+        horizons=(2,),
+        diagnostics=diagnostics,
+    )
+
+    assert events.empty
+    assert len(diagnostics) == 1
+    assert diagnostics[0]["evaluated_rows"] == 1
+    assert diagnostics[0]["selected_rows"] == 0
+    assert diagnostics[0]["fail_reason_counts"] == {"営業黒字": 1, "自己資本比率": 1}
+
+
 def test_matched_controls_backfills_same_market_after_sector_priority():
     universe = pd.DataFrame([
         {"code": "A", "sector": "Tech", "market": "Prime", "selected_for_review": True, "market_cap": 100, "drawdown_52w": -0.2, "volatility_60d": 0.3, "per_vs_sector": 1.0, "pbr_vs_sector": 1.0},

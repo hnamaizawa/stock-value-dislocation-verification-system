@@ -113,3 +113,13 @@ entry window. Unsupported longer horizons are omitted and disclosed; available s
 horizons are still evaluated. If even the shortest requested horizon cannot be evaluated,
 the UI reports both the available and minimum required session counts. If data is sufficient
 but the replay produces no selected events, the UI says so separately from a history shortage.
+
+## v0.6.73 diagnosing zero-candidate replays
+
+When a replay has no selected candidates, the UI reports evaluated security rows across
+replay dates and the most frequent `fail_reasons` from the point-in-time screen. Counts
+are security-by-date occurrences, so one security can contribute to several reasons and
+repeated dates. If no joined price/financial rows were available, the UI asks users to
+check overlapping securities, historical disclosures, and local coverage. Diagnostics
+never relax selection rules. An empty outcome cache is replayed to regenerate diagnostics
+while reusing point-in-time feature caches.

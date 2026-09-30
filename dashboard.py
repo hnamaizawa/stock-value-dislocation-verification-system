@@ -2602,11 +2602,16 @@ def _render_history_walk_forward() -> None:
             events = None if force_recalculate else load_walk_forward_result(
                 WALK_FORWARD_CACHE, cache_key
             )
+            # Empty result caches predate rejection diagnostics. Replaying is cheap
+            # because point-in-time feature snapshots are cached separately.
+            if events is not None and events.empty:
+                events = None
             loaded_cached_result = events is not None
             if events is not None:
                 st.session_state["walk_forward_validation_events"] = events
                 st.session_state["walk_forward_validation_horizons"] = horizons
             else:
+                walk_forward_diagnostics: list[dict] = []
                 progress_bar = st.progress(0.0)
                 progress_text = st.empty()
 
@@ -2630,6 +2635,7 @@ def _render_history_walk_forward() -> None:
                         data_signature=f"{data_signature}:{__version__}",
                         progress=update_walk_forward_progress,
                         historical_masters=historical_masters,
+                        diagnostics=walk_forward_diagnostics,
                     )
                     save_walk_forward_result(WALK_FORWARD_CACHE, cache_key, events)
                     st.session_state["walk_forward_validation_events"] = events
@@ -2641,9 +2647,37 @@ def _render_history_walk_forward() -> None:
                     st.session_state.get(
                         "walk_forward_empty_message",
                         "検証期間は確保できましたが、過去時点で現在の抽出条件を満たす候補は0件でした。"
-                        "簡易モードまたは抽出条件を確認してください。",
+                        "以下に各時点の評価対象数と主な不通過条件を表示します。",
                     )
                 )
+                evaluated_total = sum(int(row.get("evaluated_rows", 0)) for row in walk_forward_diagnostics)
+                reason_totals: dict[str, int] = {}
+                for row in walk_forward_diagnostics:
+                    for reason, count in row.get("fail_reason_counts", {}).items():
+                        reason_totals[reason] = reason_totals.get(reason, 0) + int(count)
+                if evaluated_total:
+                    st.caption(
+                        f"過去{len(walk_forward_diagnostics)}時点での銘柄判定数（同じ銘柄を各時点で重複計上）："
+                        f"{evaluated_total:,}件。"
+                    )
+                    if reason_totals:
+                        reason_table = pd.DataFrame([
+                            {"不通過条件": reason, "該当回数（銘柄×時点）": count}
+                            for reason, count in sorted(
+                                reason_totals.items(), key=lambda item: (-item[1], item[0])
+                            )[:10]
+                        ])
+                        st.markdown("#### 候補にならなかった主な条件")
+                        _analysis_dataframe(reason_table, width="stretch", hide_index=True)
+                        st.caption(
+                            "1銘柄が複数条件に該当するため、回数は重複します。Walk-Forward詳細モードは"
+                            "抽出条件を緩めず、保存された条件を過去時点へ適用します。"
+                        )
+                else:
+                    st.info(
+                        "評価対象となる銘柄行がありませんでした。価格と財務データの共通銘柄、"
+                        "過去時点までに利用可能な開示データ、ローカルデータ範囲を確認してください。"
+                    )
             elif loaded_cached_result:
                 st.success(
                     f"保存済みの同一条件の結果を読み込みました。候補イベント {len(events):,} 件です。"
