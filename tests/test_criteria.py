@@ -5,7 +5,10 @@ from copy import deepcopy
 import numpy as np
 import pandas as pd
 
-from value_dislocation.strategy.criteria import build_quantitative_table, screening_funnel
+from value_dislocation.strategy.criteria import (
+    build_quantitative_table,
+    screening_funnel,
+)
 from value_dislocation.strategy.features import price_features
 
 

@@ -1,3 +1,9 @@
+## v0.6.74 Walk-Forward uses applied screen conditions
+
+- [x] 条件設定画面で最後に適用した条件をWalk-Forward実行設定へ反映する。
+- [x] セッション未適用時は設定ファイルを使うことを画面へ表示する。
+- [x] 条件オーバーライドとキャッシュキーの回帰テスト、Harness、仕様書を更新する。
+
 ## v0.6.72 Walk-Forward available-history fallback
 
 - [x] ローカル日足件数から評価可能な最大期間を算出し、要求期間を安全に短縮する。

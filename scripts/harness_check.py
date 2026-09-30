@@ -439,6 +439,7 @@ def check_walk_forward_invariants(root: Path) -> CheckResult:
         "test_walk_forward_caps_horizons_to_available_price_history",
         "test_walk_forward_horizon_support_boundary_and_empty_history",
         "test_walk_forward_reports_point_in_time_rejection_diagnostics",
+        "test_applied_screen_overrides_replace_base_rules_for_walk_forward",
     ]
     required_cache = [
         "walk_forward_cache_key",
@@ -462,6 +463,7 @@ def check_walk_forward_invariants(root: Path) -> CheckResult:
         "今回の評価期間:",
         "過去時点で現在の抽出条件を満たす候補は0件でした。",
         "候補にならなかった主な条件",
+        "copy_with_screen_overrides(cfg, _current_overrides())",
     ]
     required_master = [
         "archive_security_master", "backfill_security_master_history",
@@ -540,6 +542,7 @@ def check_blueprint(root: Path) -> CheckResult:
         "walk_forward_star_cohorts_must_use_production_badge_functions",
         "walk_forward_delayed_entry_must_not_change_selection_eligibility",
         "walk_forward_zero_candidate_must_show_point_in_time_rejection_reasons",
+        "walk_forward_must_use_last_submitted_session_screen_config",
         "walk_forward_must_explain_insufficient_local_price_history",
     }
     invariants = set(blueprint.get("non_negotiable_invariants", []))
