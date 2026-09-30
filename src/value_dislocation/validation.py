@@ -25,6 +25,28 @@ class WalkForwardConfig:
     entry_delay_trading_days: tuple[int, ...] = (3, 5)
 
 
+def supported_walk_forward_horizons(
+    prices: pd.DataFrame,
+    horizons: Iterable[int],
+    *,
+    minimum_history_trading_days: int = 60,
+    entry_delay_trading_days: Iterable[int] = (3, 5),
+) -> tuple[int, ...]:
+    """Keep requested horizons whose future outcomes can fit the stored price history.
+
+    A replay date needs ``minimum_history_trading_days`` observations before it and
+    the requested horizon plus the longest delayed-entry window after it. Capping
+    to supported horizons lets shorter local datasets still produce valid shorter-
+    horizon results instead of returning no replay dates because of a 180-day request.
+    """
+    if prices.empty or "date" not in prices.columns:
+        return ()
+    dates = pd.to_datetime(prices["date"], errors="coerce").dropna().dt.normalize().unique()
+    maximum_delay = max((int(value) for value in entry_delay_trading_days), default=0)
+    maximum_supported_horizon = len(dates) - int(minimum_history_trading_days) - maximum_delay - 1
+    return tuple(sorted({int(value) for value in horizons if int(value) <= maximum_supported_horizon}))
+
+
 def _numeric(frame: pd.DataFrame, column: str) -> pd.Series:
     if column not in frame.columns:
         return pd.Series(np.nan, index=frame.index, dtype=float)

@@ -9,6 +9,7 @@ from value_dislocation.validation import (
     WalkForwardConfig,
     _forward_return,
     matched_controls,
+    supported_walk_forward_horizons,
     walk_forward_cohort_summary,
     walk_forward_entry_timing_summary,
     walk_forward_summary,
@@ -96,6 +97,23 @@ def test_walk_forward_entry_timing_uses_only_reversal_star_events():
     assert np.isclose(result.loc["選定日終値", "平均リターン"], 0.10)
     assert np.isclose(result.loc["3取引日待機", "平均リターン"], 0.07)
     assert np.isclose(result.loc["5取引日待機", "5%以上下落率"], 1.0)
+
+
+def test_walk_forward_caps_horizons_to_available_price_history():
+    prices = pd.DataFrame({"date": pd.bdate_range("2025-01-06", periods=155)})
+    supported = supported_walk_forward_horizons(
+        prices, (10, 20, 30, 60, 90, 180), minimum_history_trading_days=60,
+        entry_delay_trading_days=(3, 5),
+    )
+    assert supported == (10, 20, 30, 60)
+
+
+def test_walk_forward_horizon_support_boundary_and_empty_history():
+    minimum = pd.DataFrame({"date": pd.bdate_range("2025-01-06", periods=76)})
+    insufficient = pd.DataFrame({"date": pd.bdate_range("2025-01-06", periods=75)})
+    assert supported_walk_forward_horizons(minimum, (10, 20)) == (10,)
+    assert supported_walk_forward_horizons(insufficient, (10, 20)) == ()
+    assert supported_walk_forward_horizons(pd.DataFrame(), (10,)) == ()
 
 
 def test_matched_controls_backfills_same_market_after_sector_priority():
