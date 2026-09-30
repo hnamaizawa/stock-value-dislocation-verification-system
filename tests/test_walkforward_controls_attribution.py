@@ -5,6 +5,7 @@ import pandas as pd
 
 from value_dislocation import validation
 from value_dislocation.strategy.attribution import add_external_shock_attribution
+from value_dislocation.strategy.criteria import copy_with_screen_overrides
 from value_dislocation.validation import (
     WalkForwardConfig,
     _forward_return,
@@ -151,6 +152,21 @@ def test_walk_forward_reports_point_in_time_rejection_diagnostics(monkeypatch):
     assert diagnostics[0]["evaluated_rows"] == 1
     assert diagnostics[0]["selected_rows"] == 0
     assert diagnostics[0]["fail_reason_counts"] == {"営業黒字": 1, "自己資本比率": 1}
+
+
+def test_applied_screen_overrides_replace_base_rules_for_walk_forward():
+    base = {"universe": {"min_price_yen": 100}, "screen": {"quantitative_min_score": 42}}
+    overrides = {
+        "universe": {"min_price_yen": 0},
+        "screen": {"quantitative_min_score": 0, "use_structural_deterioration_guard": False},
+    }
+
+    applied = copy_with_screen_overrides(base, overrides)
+
+    assert applied["universe"]["min_price_yen"] == 0
+    assert applied["screen"]["quantitative_min_score"] == 0
+    assert applied["screen"]["use_structural_deterioration_guard"] is False
+    assert base["screen"]["quantitative_min_score"] == 42
 
 
 def test_matched_controls_backfills_same_market_after_sector_priority():

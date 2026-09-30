@@ -123,3 +123,11 @@ repeated dates. If no joined price/financial rows were available, the UI asks us
 check overlapping securities, historical disclosures, and local coverage. Diagnostics
 never relax selection rules. An empty outcome cache is replayed to regenerate diagnostics
 while reusing point-in-time feature caches.
+
+## v0.6.74 using the applied screen configuration
+
+The condition builder stores submitted values in Streamlit session state rather than
+rewriting `config/real_data.yaml`. Walk-Forward therefore overlays the last submitted
+`_current_overrides()` when `screening_revision` is positive. If no screen conditions were
+submitted in that session, it uses the real configuration file and labels that source in
+the UI. The merged config is included in the result cache key.

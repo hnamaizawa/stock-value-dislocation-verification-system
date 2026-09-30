@@ -2508,6 +2508,10 @@ def _render_history_walk_forward() -> None:
     )
     mode = modes.get(mode_name or "標準", modes["標準"])
     st.caption(mode["description"])
+    if int(st.session_state.get("screening_revision", 0)) > 0:
+        st.caption("抽出条件は、このセッションで最後に『条件を適用』した設定を使用します。")
+    else:
+        st.caption("このセッションで条件を適用していない場合は、config/real_data.yamlの設定を使用します。")
     advanced = st.checkbox("詳細設定を変更", value=False, key="wf_advanced", help="再現時点数・間隔・比較銘柄数・評価期間を個別に変更します。")
     if advanced:
         c1, c2, c3 = st.columns(3)
@@ -2545,6 +2549,10 @@ def _render_history_walk_forward() -> None:
         data = load_curated_latest(ROOT)
         historical_masters = load_security_master_history(ROOT)
         cfg = load_config(REAL_CONFIG)
+        if int(st.session_state.get("screening_revision", 0)) > 0:
+            # The condition builder applies edits to session state; it does not
+            # rewrite config/real_data.yaml. Reuse the last submitted values here.
+            cfg = copy_with_screen_overrides(cfg, _current_overrides())
         settings = WalkForwardConfig(
             max_snapshots=int(snapshots),
             spacing_trading_days=int(spacing),
