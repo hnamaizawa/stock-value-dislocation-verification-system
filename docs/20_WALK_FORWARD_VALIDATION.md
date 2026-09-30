@@ -104,3 +104,12 @@ session after selection and measure the requested horizon from that entry sessio
 future prices are joined only after eligibility is frozen and can never change the badge.
 Replay dates reserve enough future sessions for the largest requested horizon plus entry
 delay, reducing incomparable completion counts.
+
+## v0.6.72 adapting to local price history
+
+Before execution, the UI checks the number of unique stored trading sessions against the
+60-session minimum history, each requested evaluation horizon, and the longest delayed
+entry window. Unsupported longer horizons are omitted and disclosed; available shorter
+horizons are still evaluated. If even the shortest requested horizon cannot be evaluated,
+the UI reports both the available and minimum required session counts. If data is sufficient
+but the replay produces no selected events, the UI says so separately from a history shortage.
