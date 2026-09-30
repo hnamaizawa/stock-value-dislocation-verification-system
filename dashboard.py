@@ -78,6 +78,8 @@ from value_dislocation.walkforward_cache import (
 from value_dislocation.validation import (
     WalkForwardConfig,
     attribution_outcome_summary,
+    walk_forward_cohort_summary,
+    walk_forward_entry_timing_summary,
     walk_forward_summary,
     walk_forward_validation,
 )
@@ -2474,9 +2476,9 @@ def _walk_forward_data_signature() -> str:
 def _render_history_walk_forward() -> None:
     st.markdown("### Walk-Forward過去検証")
     st.caption(
-        "現在の定量・構造悪化ルールを過去の時点へ再適用し、その後の実績を採点します。"
+        "現在の定量・構造悪化ルールと、画面で使う◎☆判定関数を過去の時点へ再適用し、その後の実績を採点します。"
         "選定には各時点までの価格・開示だけを使い、将来株価は選定完了後の結果評価にのみ使用します。"
-        "過去ニュースや人手の外的要因レビューは再現しないため、◎☆全体ではなく定量候補層の検証です。"
+        "過去ニュースや人手の外的要因レビューは再現しません。◎☆はローカル日足と定量指標で再現します。"
         "10/20/30/60/90/180日は暦日ではなく、選定日の後に観測できた取引セッション数です。"
     )
     st.warning(
@@ -2648,6 +2650,45 @@ def _render_history_walk_forward() -> None:
         "青と赤の棒は横並びで比較し、紫の菱形は両者の差を表します。各系列は積み上げていません。"
         "0%線より上ならプラス、選択効果が0より上なら候補が比較銘柄を上回ったことを示します。"
     )
+
+    available_horizons = [
+        value for value in result_horizons
+        if f"return_{int(value)}d" in events.columns
+    ]
+    comparison_horizon = st.selectbox(
+        "判定段階・買付タイミングの比較期間",
+        available_horizons,
+        index=(available_horizons.index(30) if 30 in available_horizons else 0),
+        format_func=lambda value: f"{value}取引日後",
+        key="wf_cohort_horizon",
+        help="候補選定（または待機後の買付）から何取引日後の成績を比べるかを指定します。",
+    )
+    cohort = walk_forward_cohort_summary(events, horizon_days=int(comparison_horizon))
+    shown_cohort = cohort.copy()
+    for col in ["平均リターン", "中央値", "プラス率", "5%以上下落率"]:
+        shown_cohort[col] = pd.to_numeric(shown_cohort[col], errors="coerce") * 100
+    st.markdown("#### 判定段階別の成績")
+    _analysis_dataframe(shown_cohort, width="stretch", hide_index=True)
+    st.caption(
+        "同じ定量候補を、定量候補全体 → 旧◎☆条件 → 反転確認済み◎☆の順に絞った比較です。"
+        "件数が少ない段階ほど偶然の影響が大きいため、平均だけでなく中央値・プラス率・5%以上下落率も確認してください。"
+    )
+
+    timing = walk_forward_entry_timing_summary(
+        events, horizon_days=int(comparison_horizon), reversal_only=True
+    )
+    if not timing.empty and int(timing["確定件数"].max()) > 0:
+        shown_timing = timing.copy()
+        for col in ["平均リターン", "中央値", "プラス率", "5%以上下落率"]:
+            shown_timing[col] = pd.to_numeric(shown_timing[col], errors="coerce") * 100
+        st.markdown("#### 反転確認済み◎☆の買付タイミング比較")
+        _analysis_dataframe(shown_timing, width="stretch", hide_index=True)
+        st.caption(
+            "選定日終値で入る場合と、選定後3/5取引日待って終値で入る場合を比較します。"
+            "待機後から同じ取引日数を測り、判定条件には待機中の将来データを混ぜません。売買推奨ではありません。"
+        )
+    else:
+        st.info("この期間には成績を確定できる反転確認済み◎☆がなく、買付タイミング比較は表示できません。")
 
     attribution = attribution_outcome_summary(events, horizon_days=30)
     if not attribution.empty:

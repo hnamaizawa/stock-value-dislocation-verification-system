@@ -54,6 +54,13 @@ J-Quants決算サマリーにない有利子負債は現段階で欠損とし、
 
 `date,code,name,fiscal_year,quarter,market`
 
+## WalkForwardEvent
+
+既存の選定日・銘柄・将来リターン・類似非選択比較・銘柄マスター監査列に加え、
+`intuitive_symbol,evidence_score,legacy_star_eligible,reversal_star_eligible,star_rule_version,trend_score`
+を保存する。待機買付の結果は `return_{N}d_entry_delay_3d` と
+`return_{N}d_entry_delay_5d` とし、資格判定完了後の結果評価にだけ利用する。
+
 ## ExternalEventReviewQueue
 
 `run_id,data_cutoff_at,code,name,sector,market,close,quantitative_score,drawdown_52w,relative_return_6m,sales_cagr_3y,operating_margin,equity_ratio,forecast_op_growth,event_date,category,externality,temporary_probability,catalyst_probability,evidence,source_url,review_status,reviewer,reviewed_at,expires_at`

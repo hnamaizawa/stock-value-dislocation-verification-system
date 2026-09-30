@@ -1,14 +1,16 @@
 from __future__ import annotations
 
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable, Iterable
 
 import numpy as np
 import pandas as pd
 
-from .history import STAR_OUTCOME_HORIZONS
 from .data.security_master_history import SecurityMasterSnapshot, select_security_master_as_of
+from .decision.buy_readiness import build_buy_readiness, build_intuitive_signal
+from .decision.trend import build_trend_transition
+from .history import STAR_OUTCOME_HORIZONS
 from .strategy.attribution import add_external_shock_attribution
 from .strategy.criteria import apply_quantitative_criteria, prepare_quantitative_universe
 from .walkforward_cache import load_feature_cache, save_feature_cache
@@ -20,6 +22,7 @@ class WalkForwardConfig:
     spacing_trading_days: int = 20
     controls_per_event: int = 5
     minimum_history_trading_days: int = 60
+    entry_delay_trading_days: tuple[int, ...] = (3, 5)
 
 
 def _numeric(frame: pd.DataFrame, column: str) -> pd.Series:
@@ -52,13 +55,15 @@ def _walk_forward_dates(
     max_snapshots: int,
     spacing_trading_days: int,
     minimum_history_trading_days: int,
+    required_future_sessions: int = 10,
 ) -> list[pd.Timestamp]:
     if prices.empty or "date" not in prices.columns:
         return []
     dates = pd.Series(pd.to_datetime(prices["date"], errors="coerce").dropna().dt.normalize().unique()).sort_values().tolist()
-    if len(dates) <= minimum_history_trading_days + 10:
+    future_sessions = max(int(required_future_sessions), 1)
+    if len(dates) <= minimum_history_trading_days + future_sessions:
         return []
-    latest_usable_index = len(dates) - 11  # leave at least ~10 trading days for an observable outcome
+    latest_usable_index = len(dates) - future_sessions - 1
     candidates: list[pd.Timestamp] = []
     i = latest_usable_index
     while i >= minimum_history_trading_days and len(candidates) < max_snapshots:
@@ -108,6 +113,48 @@ def _forward_return_indexed(
         (pd.Timestamp(dates[position]).normalize() - pd.Timestamp(anchor).normalize()).days
     )
     return price / float(entry_price) - 1.0, actual_days
+
+
+def _delayed_entry_indexed(
+    index: dict[str, tuple[np.ndarray, np.ndarray]],
+    code: str,
+    anchor: pd.Timestamp,
+    delay_days: int,
+) -> tuple[pd.Timestamp | None, float | None]:
+    """Return the close on the Nth session after selection (zero means selection close)."""
+    values = index.get(str(code))
+    if values is None:
+        return None, None
+    dates, closes = values
+    anchor_day = np.datetime64(pd.Timestamp(anchor).tz_localize(None).normalize(), "ns")
+    if int(delay_days) <= 0:
+        position = int(np.searchsorted(dates, anchor_day, side="right")) - 1
+    else:
+        position = int(np.searchsorted(dates, anchor_day, side="right")) + int(delay_days) - 1
+    if position < 0 or position >= len(dates):
+        return None, None
+    price = float(closes[position])
+    if not np.isfinite(price) or price <= 0:
+        return None, None
+    return pd.Timestamp(dates[position]).normalize(), price
+
+
+def _point_in_time_signal(row: pd.Series, prices: pd.DataFrame) -> tuple[dict, dict, dict]:
+    """Replay the production badge functions using only prices known at the replay date."""
+    transition = build_trend_transition(prices, lookback_days=90)
+    benchmark_source = str(row.get("benchmark_source", "") or "")
+    relative_value = pd.to_numeric(pd.Series([row.get("relative_return_6m")]), errors="coerce").iloc[0]
+    benchmark_available = (
+        benchmark_source in {"official_topix", "topix_etf_proxy"}
+        if benchmark_source else bool(pd.notna(relative_value))
+    )
+    readiness = build_buy_readiness(
+        row.to_dict(),
+        external_quote_available=True,
+        benchmark_available=benchmark_available,
+        trend=transition.get("current", {}),
+    )
+    return readiness, build_intuitive_signal(readiness, transition), transition
 
 
 def _forward_return(
@@ -285,7 +332,8 @@ def walk_forward_validation(
     Selection uses only rows whose price/disclosure date is on or before each replay
     date.  Future prices are joined *after* selection solely for outcome evaluation.
     The routine deliberately does not reconstruct historical external-event reviews or
-    news; it validates the quantitative + structural screen only.
+    news. It does replay the same readiness and ◎☆ badge functions used by the app from
+    the point-in-time quantitative rows and local price history.
     """
     settings = settings or WalkForwardConfig()
     horizons = tuple(int(value) for value in horizons)
@@ -294,6 +342,7 @@ def walk_forward_validation(
         max_snapshots=settings.max_snapshots,
         spacing_trading_days=settings.spacing_trading_days,
         minimum_history_trading_days=settings.minimum_history_trading_days,
+        required_future_sessions=max(horizons, default=10) + max(settings.entry_delay_trading_days, default=0),
     )
     if not dates:
         return pd.DataFrame()
@@ -332,9 +381,14 @@ def walk_forward_validation(
         evaluated = apply_quantitative_criteria(prepared, config)
         evaluated = with_attribution(evaluated)
         selected = evaluated.loc[evaluated.get("selected_for_review", False).fillna(False).astype(bool)].copy()
+        point_price_groups = _price_groups(point_prices)
         for _, row in selected.iterrows():
             entry = float(pd.to_numeric(pd.Series([row.get("close")]), errors="coerce").iloc[0])
             controls = matched_controls(evaluated, row, count=settings.controls_per_event)
+            readiness, intuitive, transition = _point_in_time_signal(
+                row, point_price_groups.get(str(row.get("code", "")), pd.DataFrame())
+            )
+            trend = transition.get("current", {})
             event = {
                 "selection_date": pd.Timestamp(as_of).date().isoformat(),
                 "code": str(row.get("code", "")),
@@ -346,7 +400,13 @@ def walk_forward_validation(
                 "external_shock_attribution_score": row.get("external_shock_attribution_score"),
                 "company_specific_component_6m": row.get("company_specific_component_6m"),
                 "control_codes": ",".join(controls.get("code", pd.Series(dtype=str)).astype(str).tolist()),
-                "control_count": int(len(controls)),
+                "control_count": len(controls),
+                "intuitive_symbol": intuitive.get("symbol", ""),
+                "evidence_score": readiness.get("evidence_score"),
+                "legacy_star_eligible": bool(intuitive.get("legacy_star", False)),
+                "reversal_star_eligible": bool(intuitive.get("reversal_star", False)),
+                "star_rule_version": intuitive.get("star_rule_version", ""),
+                "trend_score": trend.get("trend_score"),
                 **cohort_audit,
             }
             for horizon in horizons:
@@ -367,6 +427,16 @@ def walk_forward_validation(
                     float(selected_return) - c_mean if selected_return is not None and c_mean is not None else None
                 )
                 event[f"control_completed_{horizon}d"] = len(control_returns)
+                for delay in settings.entry_delay_trading_days:
+                    delayed_date, delayed_price = _delayed_entry_indexed(
+                        price_index, event["code"], as_of, int(delay)
+                    )
+                    delayed_return = None
+                    if delayed_date is not None and delayed_price is not None:
+                        delayed_return, _ = _forward_return_indexed(
+                            price_index, event["code"], delayed_date, delayed_price, int(horizon)
+                        )
+                    event[f"return_{horizon}d_entry_delay_{int(delay)}d"] = delayed_return
             events.append(event)
         if progress is not None:
             progress({
@@ -374,7 +444,7 @@ def walk_forward_validation(
                 "snapshot": snapshot_number,
                 "total_snapshots": total_dates,
                 "as_of": pd.Timestamp(as_of),
-                "selected_count": int(len(selected)),
+                "selected_count": len(selected),
                 "message": "再現時点の評価が完了しました",
             })
     return pd.DataFrame(events)
@@ -389,7 +459,7 @@ def walk_forward_summary(events: pd.DataFrame, horizons: Iterable[int] = STAR_OU
         rows.append(
             {
                 "期間": f"{int(horizon)}取引日",
-                "確定件数": int(len(selected)),
+                "確定件数": len(selected),
                 "候補平均": float(selected.mean()) if len(selected) else None,
                 "候補プラス率": float((selected > 0).mean()) if len(selected) else None,
                 "類似非選択平均": float(control.mean()) if len(control) else None,
@@ -397,6 +467,57 @@ def walk_forward_summary(events: pd.DataFrame, horizons: Iterable[int] = STAR_OU
                 "選択効果プラス率": float((edge > 0).mean()) if len(edge) else None,
             }
         )
+    return pd.DataFrame(rows)
+
+
+def walk_forward_cohort_summary(events: pd.DataFrame, *, horizon_days: int = 30) -> pd.DataFrame:
+    """Compare nested selection stages with robust outcome statistics."""
+    if events.empty:
+        return pd.DataFrame()
+    cohorts = [
+        ("定量候補全体", pd.Series(True, index=events.index)),
+        ("旧◎☆条件", events.get("legacy_star_eligible", pd.Series(False, index=events.index)).fillna(False).astype(bool)),
+        ("反転確認済み◎☆", events.get("reversal_star_eligible", pd.Series(False, index=events.index)).fillna(False).astype(bool)),
+    ]
+    rows: list[dict] = []
+    for label, mask in cohorts:
+        values = _numeric(events.loc[mask], f"return_{int(horizon_days)}d").dropna()
+        rows.append({
+            "判定段階": label,
+            "該当件数": int(mask.sum()),
+            "確定件数": len(values),
+            "平均リターン": float(values.mean()) if len(values) else None,
+            "中央値": float(values.median()) if len(values) else None,
+            "プラス率": float((values > 0).mean()) if len(values) else None,
+            "5%以上下落率": float((values <= -0.05).mean()) if len(values) else None,
+        })
+    return pd.DataFrame(rows)
+
+
+def walk_forward_entry_timing_summary(
+    events: pd.DataFrame, *, horizon_days: int = 30, reversal_only: bool = True,
+) -> pd.DataFrame:
+    """Compare immediate and delayed entries; eligibility always remains fixed at selection time."""
+    if events.empty:
+        return pd.DataFrame()
+    frame = events
+    if reversal_only:
+        mask = events.get("reversal_star_eligible", pd.Series(False, index=events.index)).fillna(False).astype(bool)
+        frame = events.loc[mask]
+    columns = [("選定日終値", f"return_{int(horizon_days)}d")]
+    for delay in (3, 5):
+        columns.append((f"{delay}取引日待機", f"return_{int(horizon_days)}d_entry_delay_{delay}d"))
+    rows: list[dict] = []
+    for label, column in columns:
+        values = _numeric(frame, column).dropna()
+        rows.append({
+            "買付タイミング": label,
+            "確定件数": len(values),
+            "平均リターン": float(values.mean()) if len(values) else None,
+            "中央値": float(values.median()) if len(values) else None,
+            "プラス率": float((values > 0).mean()) if len(values) else None,
+            "5%以上下落率": float((values <= -0.05).mean()) if len(values) else None,
+        })
     return pd.DataFrame(rows)
 
 

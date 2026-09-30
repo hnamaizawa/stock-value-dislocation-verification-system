@@ -305,3 +305,11 @@ Version 0.5.1 implements the immediate performance and SBI CSV bridge improvemen
 - [x] 条件バブルの重複表示を解消する
 - [x] 色・円サイズ・基準線・ホバーの読み方を画面で説明する
 - [x] 単純な実績棒グラフへ戻らない回帰テストとHarness契約を追加する
+## v0.6.71 production-star-aligned Walk-Forward
+
+- [x] 本番画面と同じ購入判断・◎☆判定関数を過去時点へ適用する
+- [x] 定量候補全体・旧◎☆・反転確認済み◎☆を同一期間で比較する
+- [x] 中央値・プラス率・5%以上下落率・確定件数を併記する
+- [x] 即時・3取引日待機・5取引日待機を選定条件と分離して比較する
+- [x] 最大評価期間まで確定できる再現日を使用する
+- [x] 回帰テスト・Harness・blueprint・文書を更新する

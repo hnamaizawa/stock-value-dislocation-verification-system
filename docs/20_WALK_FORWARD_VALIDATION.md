@@ -3,7 +3,7 @@
 ## Purpose
 
 Validate the value-dislocation quantitative screen without waiting only for future live outcomes.
-The validation layer never reconstructs historical news or human external-event approval. It replays the **current quantitative + structural screen** at historical as-of dates using only data available by each date.
+The validation layer never reconstructs historical news or human external-event approval. It replays the **current quantitative + structural screen and production ◎☆ badge functions** at historical as-of dates using only data available by each date.
 
 ## Point-in-time rule
 
@@ -87,3 +87,20 @@ The dashboard provides three modes:
 
 Users can override the settings or explicitly bypass the complete-result cache. Feature caches
 may still be reused because they contain threshold-independent point-in-time metrics.
+
+## v0.6.71 production badge cohorts and entry timing
+
+Each point-in-time quantitative candidate is passed through the same `build_buy_readiness`
+and `build_intuitive_signal` functions as the dashboard. Results retain
+`legacy_star_eligible`, `reversal_star_eligible`, `star_rule_version`, evidence score, and
+trend score. The dashboard compares the nested quantitative, legacy-star, and
+reversal-confirmed-star cohorts over the same horizon.
+
+Every cohort reports confirmed count, mean, median, positive rate, and the rate of returns
+at or below -5%. A small stricter cohort must not be judged from its mean alone.
+
+For reversal-confirmed stars, delayed-entry simulations use the close of the third or fifth
+session after selection and measure the requested horizon from that entry session. These
+future prices are joined only after eligibility is frozen and can never change the badge.
+Replay dates reserve enough future sessions for the largest requested horizon plus entry
+delay, reducing incomparable completion counts.

@@ -562,3 +562,9 @@
 - 保存時は同じ draft / editor 結果を保存し、保存後も draft と同期。
 - Enter確定→フォーカス移動→保存の回帰を静的テストで固定。
 - `harness/app_blueprint.yaml` は変更なし。
+## v0.6.71
+
+- Walk-Forwardで本番画面と同じ `build_buy_readiness` / `build_intuitive_signal` をpoint-in-time再生。
+- 定量候補、旧◎☆、反転確認済み◎☆を平均・中央値・プラス率・5%以上下落率・件数で比較。
+- 反転確認済み◎☆の即時、3取引日待機、5取引日待機のエントリー後成績を比較。
+- 待機後データを選定資格へ混ぜず、最大評価期間まで確定可能な再現日だけを利用。
