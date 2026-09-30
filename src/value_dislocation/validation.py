@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections import Counter
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from pathlib import Path
@@ -348,6 +349,7 @@ def walk_forward_validation(
     data_signature: str = "",
     progress: Callable[[dict], None] | None = None,
     historical_masters: list[SecurityMasterSnapshot] | None = None,
+    diagnostics: list[dict] | None = None,
 ) -> pd.DataFrame:
     """Replay today's quantitative rule at historical as-of dates without look-ahead.
 
@@ -402,7 +404,25 @@ def walk_forward_validation(
             })
         evaluated = apply_quantitative_criteria(prepared, config)
         evaluated = with_attribution(evaluated)
-        selected = evaluated.loc[evaluated.get("selected_for_review", False).fillna(False).astype(bool)].copy()
+        selected_mask = evaluated.get(
+            "selected_for_review", pd.Series(False, index=evaluated.index, dtype=bool)
+        ).fillna(False).astype(bool)
+        selected = evaluated.loc[selected_mask].copy()
+        if diagnostics is not None:
+            fail_reason_counts: Counter[str] = Counter()
+            fail_reasons = evaluated.get(
+                "fail_reasons", pd.Series("", index=evaluated.index, dtype=str)
+            ).fillna("").astype(str)
+            for reason_list in fail_reasons:
+                fail_reason_counts.update(
+                    reason.strip() for reason in reason_list.split(" / ") if reason.strip()
+                )
+            diagnostics.append({
+                "selection_date": pd.Timestamp(as_of).date().isoformat(),
+                "evaluated_rows": int(len(evaluated)),
+                "selected_rows": int(len(selected)),
+                "fail_reason_counts": dict(fail_reason_counts),
+            })
         point_price_groups = _price_groups(point_prices)
         for _, row in selected.iterrows():
             entry = float(pd.to_numeric(pd.Series([row.get("close")]), errors="coerce").iloc[0])
