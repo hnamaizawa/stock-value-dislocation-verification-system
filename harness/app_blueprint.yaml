@@ -2,9 +2,12 @@ schema_version: '1.0'
 blueprint_name: japanese-equity-value-dislocation-research
 blueprint_version: 0.6.74
 canonical_project: stock-value-dislocation-verification-system
-purpose: Generate a local-first Japanese equity research application that retrieves
-  actual market and financial data, searches listed companies, creates a quantitative
-  review queue, and stops before broker order entry.
+purpose: Generate a local-first Japanese equity research application that finds
+  potentially sound Japanese companies depressed by external factors, tracks possible
+  recovery using daily price and company fundamentals including dividends, evaluates
+  outcomes at multiple future trading-session horizons, and keeps day-trading analysis
+  separate from medium- and long-term recovery research. The app supports human research
+  and decision-making and stops before broker order entry.
 required_capabilities:
 - jquants_v2_actual_data_fetch
 - jquants_v2_equity_bars_date_or_code_contract
