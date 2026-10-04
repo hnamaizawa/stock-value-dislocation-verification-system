@@ -37,7 +37,7 @@ def test_legacy_star_is_demoted_when_reversal_is_not_confirmed():
     assert signal["reversal_star"] is False
     assert signal["star"] is False
     assert signal["symbol"] == "◎"
-    assert "旧◎☆条件相当" in signal["detail"]
+    assert "株価が上向きに変わったことはまだ確認できていません" in signal["detail"]
 
 
 def test_reversal_star_requires_all_five_timing_gates():
