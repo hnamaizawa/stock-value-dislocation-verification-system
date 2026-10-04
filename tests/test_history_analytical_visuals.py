@@ -54,12 +54,27 @@ def test_security_bubbles_compare_two_horizons_and_size_by_star_count():
     assert row["比較可能件数"] == 2
 
 
+def test_security_bubbles_return_empty_result_for_same_horizon():
+    events = pd.DataFrame({
+        "code": ["11110"],
+        "name": ["A"],
+        "return_30d": [0.10],
+    })
+    bubbles = security_return_bubbles(events, 30, 30)
+    assert bubbles.empty
+    assert list(bubbles.columns) == [
+        "code", "name", "横軸リターン(%)", "縦軸リターン(%)", "◎☆回数", "比較可能件数"
+    ]
+
+
 def test_dashboard_uses_local_analytical_visuals_without_fetch_dependency():
     dashboard = Path("dashboard.py").read_text(encoding="utf-8")
     module = Path("src/value_dislocation/history_visuals.py").read_text(encoding="utf-8")
     assert "条件×期間ヒートマップ" in dashboard
     assert "条件の成績バブル" in dashboard
     assert "銘柄の期間比較バブル" in dashboard
+    assert "if x_days == y_days:" in dashboard
+    assert "横軸と縦軸に同じ期間は選べません。" in dashboard
     assert "_render_history_analytical_visuals(star_events, perf)" in dashboard
     assert "go.Heatmap" in dashboard
     assert dashboard.count("go.Scatter") >= 4
