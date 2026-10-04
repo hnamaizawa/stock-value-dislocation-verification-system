@@ -787,6 +787,7 @@ def check_history_analytical_visuals(root: Path) -> CheckResult:
         "go.Heatmap", "condition_outcome_bubbles", "security_return_bubbles",
         "_render_horizon_performance_bubbles", "_render_condition_performance_bubbles",
         "lines+markers+text", "プラス率", "確定件数", "将来の利益も保証しません",
+        "if x_days == y_days:", "横軸と縦軸に同じ期間は選べません。",
     ]
     required_module = [
         "condition_return_heatmap", "condition_outcome_bubbles", "security_return_bubbles",
@@ -796,6 +797,7 @@ def check_history_analytical_visuals(root: Path) -> CheckResult:
         "test_condition_heatmap_aligns_return_percent_and_confirmed_counts",
         "test_condition_bubbles_expose_three_analysis_dimensions",
         "test_security_bubbles_compare_two_horizons_and_size_by_star_count",
+        "test_security_bubbles_return_empty_result_for_same_horizon",
         "test_dashboard_uses_local_analytical_visuals_without_fetch_dependency",
     ]
     missing_dashboard = [term for term in required_dashboard if term not in dashboard]
