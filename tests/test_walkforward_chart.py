@@ -13,4 +13,4 @@ def test_walk_forward_chart_groups_comparisons_and_does_not_stack_selection_edge
     assert 'marker={"symbol": "diamond"' in block
     assert 'fig.add_hline(y=0' in block
     assert 'st.bar_chart(display.set_index("期間")' not in dashboard
-    assert "各系列は積み上げていません" in dashboard
+    assert "横の棒はそれぞれの平均を表し、積み上げていません。" in dashboard

@@ -16,8 +16,8 @@ def test_daily_history_text_summary_describes_filtered_result():
     ])
     lines = daily_history_text_summary(frame)
     assert 2 <= len(lines) <= 4
-    assert any("3 件" in line or "3件" in line for line in lines)
-    assert any("◎☆" in line for line in lines)
+    assert any("3 回" in line or "3回" in line for line in lines)
+    assert any("◎☆" in line and "候補として表示" in line for line in lines)
     assert any("旧履歴" in line for line in lines)
 
 
@@ -28,9 +28,9 @@ def test_evaluation_history_text_summary_describes_distribution():
         {"evaluation_date": "2026-09-20", "code": "99840", "intuitive_symbol": "×", "evaluation_status": "当日評価済み"},
     ])
     lines = evaluation_history_text_summary(frame)
-    assert any("3 件" in line or "3件" in line for line in lines)
-    assert any("◎☆/◎" in line for line in lines)
-    assert any("後日補完" in line for line in lines)
+    assert any("3 回" in line or "3回" in line for line in lines)
+    assert any("◎☆・◎" in line and "条件が比較的そろった候補" in line for line in lines)
+    assert any("後から追加した評価" in line for line in lines)
 
 
 def test_star_validation_text_summary_uses_matured_returns_and_conditions():
@@ -44,9 +44,10 @@ def test_star_validation_text_summary_uses_matured_returns_and_conditions():
         {"条件": "自己資本比率 40%以上", "90日平均": 0.06, "90日確定件数": 10},
     ])
     lines = star_validation_text_summary(events, forward, perf)
-    assert any("◎☆開始イベント" in line for line in lines)
-    assert any("平均リターン" in line for line in lines)
+    assert any("◎☆になった記録" in line for line in lines)
+    assert any("平均株価変化" in line for line in lines)
     assert any("売上CAGR 3%以上" in line for line in lines)
+    assert any("原因だと示すものではありません" in line for line in lines)
 
 
 def test_dashboard_renders_summary_on_all_three_history_views():

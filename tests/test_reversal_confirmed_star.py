@@ -37,7 +37,7 @@ def test_legacy_star_is_demoted_when_reversal_is_not_confirmed():
     assert signal["reversal_star"] is False
     assert signal["star"] is False
     assert signal["symbol"] == "◎"
-    assert "旧◎☆条件相当" in signal["detail"]
+    assert "株価が上向きに変わったことはまだ確認できていません" in signal["detail"]
 
 
 def test_reversal_star_requires_all_five_timing_gates():
@@ -111,5 +111,5 @@ def test_rule_comparison_is_prospective_and_keeps_legacy_history():
 
     summary_frame = pd.DataFrame({"期間": ["20日"], "平均リターン(%)": [8.0], "確定件数": [1]}).set_index("期間")
     lines = star_validation_text_summary(reconciled, summary_frame)
-    assert any("新旧ルール比較" in line for line in lines)
-    assert any("20日実績は旧条件" in line for line in lines)
+    assert any("◎☆の条件を厳しくする前後" in line for line in lines)
+    assert any("20取引日後の株価変化" in line for line in lines)

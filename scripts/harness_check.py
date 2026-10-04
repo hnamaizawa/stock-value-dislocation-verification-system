@@ -544,6 +544,7 @@ def check_blueprint(root: Path) -> CheckResult:
         "walk_forward_zero_candidate_must_show_point_in_time_rejection_reasons",
         "walk_forward_must_use_last_submitted_session_screen_config",
         "walk_forward_must_explain_insufficient_local_price_history",
+        "analysis_explanations_must_define_result_meaning_and_limitations",
     }
     invariants = set(blueprint.get("non_negotiable_invariants", []))
     required_files = blueprint.get("required_files", [])
@@ -785,7 +786,7 @@ def check_history_analytical_visuals(root: Path) -> CheckResult:
         "条件×期間ヒートマップ", "条件の成績バブル", "銘柄の期間比較バブル",
         "go.Heatmap", "condition_outcome_bubbles", "security_return_bubbles",
         "_render_horizon_performance_bubbles", "_render_condition_performance_bubbles",
-        "lines+markers+text", "プラス率", "確定件数", "因果関係や将来利益を保証しません",
+        "lines+markers+text", "プラス率", "確定件数", "将来の利益も保証しません",
     ]
     required_module = [
         "condition_return_heatmap", "condition_outcome_bubbles", "security_return_bubbles",

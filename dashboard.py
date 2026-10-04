@@ -322,17 +322,17 @@ DIVIDEND_WITHHOLDING_RATE = 0.20315
 
 
 METRIC_DESCRIPTIONS = {
-    "close": "分析基準日の終値です。外部最新株価とは別に保持し、候補抽出や財務評価の基準として使います。",
-    "drawdown_52w": "過去約52週間の高値から現在の分析株価がどれだけ下落したかを示します。マイナス幅が大きいほど高値から大きく下がっています。",
-    "return_6m": "約6か月前から分析基準日までの株価騰落率です。",
-    "relative_return_6m": "個別株の6か月騰落率から、市場比較指標の6か月騰落率を差し引いた値です。マイナスほど市場より弱い動きです。",
-    "sales_cagr_3y": "直近数年間の売上高の年平均成長率です。プラスは拡大、マイナスは縮小傾向を示します。",
-    "operating_margin": "売上高のうち本業の営業利益として残った割合です。業種差が大きいため同業比較を重視します。",
-    "equity_ratio": "総資産に占める自己資本の割合です。一般に高いほど借入依存が低く、財務余力があると考えられます。",
-    "forecast_annual_dividend_per_share": "会社予想を優先して採用した、1株当たりの年間配当見込みです。予想がない場合は直近実績を使うことがあります。",
-    "forecast_dividend_yield": "1株当たり予想年間配当を表示株価で割った比率です。高すぎる場合は減配懸念も確認します。",
-    "payout_ratio": "利益のうち配当に回す割合です。高すぎる場合、配当維持の余力が小さい可能性があります。",
-    "forecast_dividend_change_rate": "前期年間配当に対する予想年間配当の増減率です。プラスは増配、マイナスは減配予想です。",
+    "close": "分析に使った日の終値です。新しい株価とは別に保存し、当時の候補選びに使います。",
+    "drawdown_52w": "今の分析株価が、過去約1年間の最高値からどれだけ下がったかです。マイナスの数字が大きいほど大きく下がっています。",
+    "return_6m": "約6か月前と比べた株価の上げ下げです。",
+    "relative_return_6m": "銘柄の過去6か月の値動きと、市場全体の値動きの差です。マイナスが大きいほど市場より弱い動きでした。",
+    "sales_cagr_3y": "過去約3年間で、売上が年平均どれだけ増減したかです。プラスは増加、マイナスは縮小を表します。",
+    "operating_margin": "売上のうち、本業の利益として残った割合です。同じ業種の会社と比べると見やすくなります。",
+    "equity_ratio": "会社の資産のうち、返済の必要がない自己資本の割合です。一般に高いほど財務に余裕があります。",
+    "forecast_annual_dividend_per_share": "会社が予想している1株あたりの年間配当です。予想がない場合は直近の実績を使うことがあります。",
+    "forecast_dividend_yield": "1株あたりの年間配当を株価で割った割合です。高い場合は、配当が減る可能性も確認してください。",
+    "payout_ratio": "利益のうち配当に回す割合です。高すぎる場合、配当を続ける余裕が少ないことがあります。",
+    "forecast_dividend_change_rate": "前の年度と比べて、会社が配当を増やすか減らすかの予想です。プラスは増配、マイナスは減配です。",
 }
 
 # Keep beginner-facing explanations in one place so the same term means the
@@ -359,17 +359,17 @@ ANALYSIS_ITEM_HELP = {
     "operating_margin": METRIC_DESCRIPTIONS["operating_margin"],
     "equity_ratio": METRIC_DESCRIPTIONS["equity_ratio"],
     "forecast_dividend_yield": METRIC_DESCRIPTIONS["forecast_dividend_yield"],
-    "quantitative_score": "財務・割安度・株価下落など、定量条件の充足度を合計した比較用スコアです。",
-    "strategy_score": "選択中の抽出ルールで計算した比較用スコアです。利益確率ではありません。",
-    "定量スコア": "財務・割安度・株価下落など、定量条件の充足度を合計した比較用スコアです。",
-    "スコア": "条件の充足度を比較する参考点です。将来の利益を保証しません。",
+    "quantitative_score": "財務や株価など、設定した条件にどれだけ当てはまるかを点数にしたものです。高得点でも値上がりを保証しません。",
+    "strategy_score": "選んだ探し方の条件にどれだけ当てはまるかを示す点数です。利益が出る確率ではありません。",
+    "定量スコア": "財務や株価など、設定した条件にどれだけ当てはまるかを点数にしたものです。高得点でも値上がりを保証しません。",
+    "スコア": "設定した条件への当てはまりを比べる目安です。高いほど将来の利益が大きいという意味ではありません。",
     "selected_for_review": "定量条件を通過し、人が詳しく確認する候補になったかを示します。",
-    "selection_strategy": "候補抽出に使ったルールです。割安株調査または値動き活発度などを表します。",
-    "抽出ルール": "候補抽出に使ったルールです。割安株調査または値動き活発度などを表します。",
-    "final_evaluation": "最新トレンドを含めて保存した最終評価です。◎☆、◎、○、△、×などで表します。",
-    "intuitive_symbol": "主要条件とトレンドをまとめた直感的な評価記号です。",
-    "評価": "主要条件とトレンドをまとめた評価です。単独で売買を決めるものではありません。",
-    "最新判定": "外部最新日足で再確認したトレンド評価です。定量スコア自体は変更しません。",
+    "selection_strategy": "銘柄を探すときに選んだ方法です。「株価が下がった企業を探す」か「値動きが大きい銘柄を探す」かを表します。",
+    "抽出ルール": "銘柄を探すときに選んだ方法です。「株価が下がった企業を探す」か「値動きが大きい銘柄を探す」かを表します。",
+    "final_evaluation": "財務や業績、最近の株価の動きをまとめた目安です。記号だけで売買を決めないでください。",
+    "intuitive_symbol": "財務や業績、最近の株価の動きをまとめた目安です。評価記号は将来の値上がりを約束しません。",
+    "評価": "財務や業績、最近の株価の動きをまとめた目安です。単独で売買を決めるものではありません。",
+    "最新判定": "取得できた新しい日足を見て、株価の動きをもう一度確認した結果です。候補抽出の点数は変えません。",
     "evaluation_status": "当日評価済み、後日補完、未評価など、評価データの状態です。",
     "未評価理由": "最終評価を作れなかった理由です。データ不足や外部取得失敗などを区別します。",
     "analysis_date": "定量分析を実行し、候補状態を保存した日です。",
@@ -388,19 +388,51 @@ ANALYSIS_ITEM_HELP = {
     "return_60d": "候補選定後60取引日目までの株価リターンです。",
     "return_90d": "候補選定後90取引日目までの株価リターンです。",
     "return_180d": "候補選定後180取引日目までの株価リターンです。",
-    "selected_return": "その時点で選ばれた候補銘柄の、その後の平均リターンです。",
-    "control_return": "似た条件でも選ばれなかった比較銘柄の、その後の平均リターンです。",
-    "selection_effect": "候補銘柄のリターンから比較銘柄のリターンを引いた差です。プラスほど選別が有効だった可能性があります。",
-    "external_shock_ratio": "株価変動のうち、市場・業種など企業外の要因で説明できる割合の参考値です。",
-    "外因説明率": "株価変動のうち、市場・業種など企業外の要因で説明できる割合の参考値です。",
-    "master_coverage_ratio": "過去時点の対象銘柄を、現在保存している会社マスターでどれだけ確認できたかを示します。",
-    "survivorship_bias_warning": "上場廃止などで現在の会社マスターから消えた銘柄を復元できない可能性を示す注意です。",
-    "候補イベント": "Walk-Forwardの各過去時点で定量条件を通過した候補の延べ件数です。",
-    "再現時点": "過去の何日分をさかのぼって候補抽出を再現したかを示します。",
-    "検証期間": "Walk-Forwardで最初に再現した日から最後に再現した日までの範囲です。",
-    "会社マスター最低カバレッジ": "検証期間中で最も低かった会社マスターの網羅率です。低いほど生存者バイアスに注意が必要です。",
-    "fail_reasons": "必須条件を通過できなかった理由です。",
-    "warning_reasons": "候補から直ちに除外はしないものの、追加確認が必要な注意点です。",
+    "期間": "候補になった日から、何営業日後までの値動きを見ているかです。",
+    "十分な株価下落": "過去の高値と比べて、株価がどれだけ下がっているかを見ます。下落が大きくても、会社の問題が原因の場合があります。",
+    "市場以上の下落": "市場全体よりもこの銘柄の下落が大きかったかを見ます。市場の数字がない場合は比較できません。",
+    "売上トレンド": "会社の売上が過去数年で増えているか、減っているかを見ます。",
+    "本業の収益性": "売上から本業の利益がどれだけ残っているかを見ます。",
+    "財務余力": "会社の資産に対して、返済不要の自己資本がどれだけあるかを見ます。",
+    "現金創出の継続性": "過去の決算で、本業から現金を得られているかを見ます。",
+    "利益の質": "帳簿上の本業の利益に見合う現金が入っているかを見ます。",
+    "採算の安定性": "本業の利益率が、過去数年で大きく下がっていないかを見ます。",
+    "会社予想の修正方向": "会社が同じ年度について出した利益予想が、前回より上がったか下がったかを見ます。",
+    "同業他社対比": "同じ業種の会社と比べて、株価の動きが極端に弱くないかを見ます。",
+    "会社予想": "会社が発表した今後の本業の利益見込みです。会社の予想は後で変わることがあります。",
+    "配当の魅力": "会社が予想する配当額を株価と比べた目安です。高いだけで配当が続くとは限りません。",
+    "配当の持続性": "会社の利益に対して配当が大きすぎず、続けられそうかを見る目安です。",
+    "減配リスク": "会社が予想する配当が前より減っていないかを見ます。",
+    "価格トレンド": "最近の株価が上向きか下向きかを、過去の値動きから見た目安です。",
+    "直近20日モメンタム": "直近20営業日の株価が上がったか下がったかです。",
+    "短期の過熱感": "短い期間で株価が急に上がりすぎたり下がりすぎたりしていないかを見る目安です。",
+    "出来高の確認": "最近の売買量がいつもより増えているかを見ます。売買量だけで上昇が続くとは判断できません。",
+    "平均リターン": "対象になった記録すべての値上がり・値下がりを平均した値です。大きな上げ下げに影響されるため、中央値や件数も合わせて見てください。",
+    "平均リターン(%)": "対象になった記録すべての値上がり・値下がりを平均した値です。大きな上げ下げに影響されるため、中央値や件数も合わせて見てください。",
+    "中央値": "値動きを順に並べたときの真ん中の値です。平均よりも、一部の極端な上げ下げに左右されにくい見方です。",
+    "プラス率": "対象の記録のうち、株価が上がった割合です。何件を調べた結果かも確認してください。",
+    "プラス率(%)": "対象の記録のうち、株価が上がった割合です。何件を調べた結果かも確認してください。",
+    "5%以上下落率": "対象の記録のうち、株価が5%以上下がった割合です。大きな下落がどの程度あったかを見る目安です。",
+    "確定件数": "選んだ日数分の株価データがそろい、成績を計算できた記録数です。候補全体の件数とは異なります。",
+    "候補平均": "過去に候補として選ばれた銘柄の平均的な株価変化です。",
+    "候補プラス率": "過去に候補として選ばれた銘柄のうち、株価が上がった割合です。",
+    "類似非選択平均": "候補には選ばれませんでしたが、条件が似ていた銘柄の平均的な株価変化です。",
+    "選択効果": "選ばれた銘柄と、条件が似ていた非候補の成績の差です。プラスなら候補側が上でしたが、選び方が差の原因だと証明するものではありません。",
+    "選択効果プラス率": "候補銘柄の成績が、条件の似た非候補を上回った割合です。候補と比較銘柄の両方で株価データがそろった記録だけを数えます。",
+    "判定方式": "どの候補条件を使ったかを示します。条件が異なる結果は、同じ期間・同じ記録数かを確かめて比べてください。",
+    "selected_return": "過去に候補として選ばれた銘柄の、その後の平均的な株価変化です。",
+    "control_return": "候補には選ばれなかったものの、似た条件だった銘柄の、その後の平均的な株価変化です。",
+    "selection_effect": "候補と、条件が似ていた非候補との成績の差です。プラスなら候補の方が上でした。ただし、選び方が差を生んだと証明するものではありません。",
+    "external_shock_ratio": "株価の下落のうち、市場全体や同じ業種の値動きと重なっていた割合の目安です。外的要因が原因だと証明する数字ではありません。",
+    "外因説明率": "株価の下落のうち、市場全体や同じ業種の値動きと重なっていた割合の目安です。外的要因が原因だと証明する数字ではありません。",
+    "master_coverage_ratio": "過去に上場していた銘柄のうち、保存済みの会社一覧で確認できた割合です。",
+    "survivorship_bias_warning": "現在は上場していない会社など、保存した過去の会社一覧から漏れた銘柄があるかもしれないという注意です。",
+    "候補イベント": "過去の各日に候補条件を満たした記録の合計です。同じ銘柄でも日が違えば別々に数えます。",
+    "再現時点": "過去の候補選びを何日分再現したかを示します。",
+    "検証期間": "過去の候補選びを再現した最初の日から最後の日までです。",
+    "会社マスター最低カバレッジ": "検証期間中、過去の上場銘柄をどれだけ記録で確認できたかの最低割合です。低い場合、過去の候補や成績が偏るおそれがあります。",
+    "fail_reasons": "候補条件を満たさなかった理由です。",
+    "warning_reasons": "候補からは外していませんが、追加で確認した方がよい点です。",
     "種類": "確認材料を価格・業績・配当などに分類したものです。",
     "確認条件": "売却や再確認を検討するきっかけの例です。自動注文条件ではありません。",
     "意味": "その条件が投資仮説に与える影響を簡単に説明しています。",
@@ -412,7 +444,7 @@ ANALYSIS_ITEM_HELP = {
     "statement_type": "本決算・四半期決算など、財務諸表の種類です。",
     "sales": "会社が商品やサービスの提供で得た売上高です。",
     "operating_profit": "本業から得た利益です。",
-    "operating_cf": "本業による現金の増減です。利益が実際の現金につながっているかを見る材料です。",
+    "operating_cf": "本業で現金が増えたか減ったかを示します。帳簿上の利益が実際の現金になっているかを見る材料です。",
     "equity": "返済義務のない自己資本の金額です。",
     "total_assets": "会社が保有する資産の合計です。",
     "forecast_operating_profit": "会社が予想している通期の営業利益です。",
@@ -428,7 +460,7 @@ ANALYSIS_ITEM_HELP = {
 
 def _analysis_help(item: str, fallback: str | None = None) -> str:
     """Return a short beginner-facing explanation for one analysis item."""
-    return ANALYSIS_ITEM_HELP.get(str(item), fallback or f"{item}を分析・比較するための項目です。")
+    return ANALYSIS_ITEM_HELP.get(str(item), fallback or f"{item}についての情報です。単位や対象期間を確認し、ほかの項目と合わせて見てください。")
 
 
 def _analysis_column_config(frame: pd.DataFrame) -> dict:
@@ -718,7 +750,7 @@ def _render_trend_price_chart(
         margin={"l": 20, "r": 20, "t": 70, "b": 20}, height=500,
     )
     st.plotly_chart(fig, width="stretch", config={"displaylogo": False})
-    st.caption("太線が株価、20日線＝短期、50日線＝中期、200日線＝長期の目安です。価格帯やラインは参考表示で、注文指示ではありません。")
+    st.caption("太い線が実際の株価、ほかの線が過去20・50・200営業日の平均株価です。短い平均線は最近の動き、長い平均線は大まかな長期の動きを見る目安です。線は売買の指示ではありません。")
 
 
 def _render_history_analytical_visuals(star_events: pd.DataFrame, perf: pd.DataFrame) -> None:
@@ -732,8 +764,8 @@ def _render_history_analytical_visuals(star_events: pd.DataFrame, perf: pd.DataF
 
     st.markdown("### 多面的な実績分析")
     st.caption(
-        "保存済み履歴だけを組み合わせて、条件・期間・リターン・プラス率・確定件数の関係を可視化します。"
-        "円が大きいほど観測件数が多いことを表します。相関や傾向であり、因果関係や将来利益を保証しません。"
+        "過去に保存した記録から、どの条件の後に株価がどう動いたかを表示します。色や位置は平均の値上がり・値下がりを、丸の大きさは成績を確認できた記録数を表します。"
+        "過去に一緒に起きた動きであり、その条件が値動きの原因とは限りません。将来の利益も保証しません。"
     )
     heat_tab, security_tab = st.tabs(
         ["条件×期間ヒートマップ", "銘柄の期間比較バブル"]
@@ -787,7 +819,7 @@ def _render_history_analytical_visuals(star_events: pd.DataFrame, perf: pd.DataF
                     yaxis_title="判定時に満たしていた条件",
                 )
                 st.plotly_chart(fig, width="stretch", config={"displaylogo": False})
-                st.caption("緑は平均プラス、赤は平均マイナスです。各マスの n はその期間まで実績が確定したイベント数です。")
+                st.caption("緑のマスは平均して値上がり、赤は平均して値下がりしたことを示します。マスの数字は、その日数後まで株価データがそろった記録数です。")
 
     with security_tab:
         c1, c2 = st.columns(2)
@@ -842,7 +874,7 @@ def _render_history_analytical_visuals(star_events: pd.DataFrame, perf: pd.DataF
                 yaxis_title=f"銘柄別 {y_days}取引日後の平均リターン（%）",
             )
             st.plotly_chart(fig, width="stretch", config={"displaylogo": False})
-            st.caption("右上は両期間とも平均プラス、左上は短期下落後に中長期で回復、右下は短期上昇後に失速した領域です。円の大きさは◎☆回数です。")
+            st.caption("横と縦がどちらも0%より上なら、選んだ2つの期間で平均して値上がりしています。左上は短い期間では下がり、長い期間では上がった銘柄、右下はその逆です。丸が大きいほど◎☆になった回数が多い銘柄です。")
 
 
 def _render_horizon_performance_bubbles(forward_chart: pd.DataFrame) -> None:
@@ -1745,9 +1777,9 @@ def render_condition_builder() -> None:
     else:
         with top1:
             st.markdown("**値動き活発型**")
-            st.caption("共通条件と値動き条件を調整してください。財務・配当・市場劣後条件は候補抽出には使いません。")
+            st.caption("最近よく売買され、株価が日々大きく動く銘柄を探します。会社の財務や配当の良し悪しは、この探し方では判定しません。")
         with top2:
-            st.caption("初期目安: 60日年率ボラ35%以上、20日平均日中値幅2.5%以上、値動き活発度50点以上。")
+            st.caption("初期設定では、過去60営業日の株価の揺れ幅と、直近20営業日の1日の高値・安値の幅を見ています。値動きが大きいほど、損失も大きくなることがあります。")
 
     active_mode = draft_rule == "active_trading"
     with st.form("screening_conditions", clear_on_submit=False):
@@ -1768,12 +1800,12 @@ def render_condition_builder() -> None:
             require_forecast = st.checkbox("会社予想がない銘柄を除外", value=bool(st.session_state["ui_require_forecast"]), disabled=active_mode, help="会社発表の業績予想を確認できない銘柄を候補から外します。")
             drawdown = st.slider("52週高値からの下落率（%以上）", 0, 70, value=int(st.session_state["ui_drawdown_pct"]), step=1, help=METRIC_HELP["minimum_drawdown_52w"], disabled=active_mode)
 
-        st.markdown("### 2. 構造悪化ガード（バリュートラップ回避）")
+        st.markdown("### 2. 会社の業績悪化を確認")
         use_structural_guard = st.checkbox(
-            "利益の質・採算悪化・会社予想修正・同業比較を必須チェックにする",
+            "現金収入・利益率・会社予想・同業他社との比較も確認する",
             value=bool(st.session_state["ui_use_structural_guard"]),
             disabled=active_mode,
-            help="過去業績が良くても企業固有の構造悪化が進んでいる銘柄を除外します。データ欠損だけでは除外せず警告します。",
+            help="過去の業績が良くても、最近になって本業や財務が悪化している会社を確認します。必要な数字がない場合は自動で除外せず、確認が必要と表示します。",
         )
         sg1, sg2, sg3, sg4 = st.columns(4)
         with sg1:
@@ -1804,7 +1836,7 @@ def render_condition_builder() -> None:
                 disabled=active_mode or (not use_structural_guard),
                 help=METRIC_HELP["minimum_sector_relative_return_6m"],
             )
-        st.caption("利益現金化率=営業CF÷営業利益。営業利益率の悪化幅は直近最大3期、会社予想修正は同じ対象年度の前回予想比、同業比較は同業種の6か月騰落率中央値比です。")
+        st.caption("ここでは、本業の利益に見合う現金が入っているか、利益率が下がっていないか、会社の利益予想が下方修正されていないか、同業他社より大きく株価が下がっていないかを確認します。数字が取れない場合は、除外せず確認事項として残します。")
 
         st.markdown("### 3. 配当条件")
         dv1, dv2, dv3 = st.columns(3)
@@ -1817,7 +1849,7 @@ def render_condition_builder() -> None:
         with dv3:
             max_payout_pct = st.slider("最大配当性向（%）", 10.0, 200.0, value=float(st.session_state["ui_max_payout_pct"]), step=5.0, disabled=(not require_dividend) or active_mode, help=METRIC_HELP["maximum_payout_ratio"])
             exclude_dividend_cut = st.checkbox("減配予想の銘柄を除外", value=bool(st.session_state["ui_exclude_dividend_cut"]), disabled=(not require_dividend) or active_mode, help="会社予想の年間配当が前期実績を下回る銘柄を除外します。")
-        st.caption("予想配当は『次期会社予想 → 当期会社予想 → 直近実績』の順で採用します。高利回りは減配懸念で株価が下がっている場合もあります。")
+        st.caption("配当の予想は、次の年度の会社予想、現在の年度の会社予想、直近の実績の順に使います。利回りがとても高い場合、株価の下落や将来の減配が理由のこともあるため、配当が続けられるかも確認してください。")
 
         st.markdown("### 4. 市場比較・相対条件")
         benchmark_options = {
@@ -2367,7 +2399,7 @@ def _render_history_star_validation(evaluation: pd.DataFrame) -> None:
     }
     unique_star_codes = star_events.get("code", pd.Series(dtype=str)).dropna().astype(str).nunique()
     first_metrics = st.columns(4)
-    first_metrics[0].metric("◎☆開始イベント", f"{len(star_events):,}", f"ユニーク {unique_star_codes:,} 銘柄")
+    first_metrics[0].metric("◎☆になった記録", f"{len(star_events):,}", f"対象 {unique_star_codes:,} 銘柄")
     for idx, horizon in enumerate((10, 20, 30), start=1):
         completed = completed_by_horizon[horizon]
         first_metrics[idx].metric(f"{horizon}日確定", f"{len(completed):,}", f"平均 {completed.mean()*100:.1f}%" if len(completed) else "未確定")
@@ -2385,8 +2417,8 @@ def _render_history_star_validation(evaluation: pd.DataFrame) -> None:
     ).fillna(0).gt(0).any():
         st.markdown("#### 可視化：◎☆後の期間別成績（リターン・プラス率・確定件数）")
         st.caption(
-            "横軸は判定後の取引日数、縦軸は平均リターン、色はプラス率、円の大きさは確定件数です。"
-            "線の傾きで、短期から中長期へ成績が改善したか失速したかを確認できます。"
+            "横軸は◎☆になった後の日数、縦軸はその期間までの平均株価変化です。色は株価が上がった割合、丸の大きさは成績を確認できた記録数です。"
+            "平均だけで判断せず、上がった割合と記録数も合わせて確認してください。"
         )
         _render_horizon_performance_bubbles(forward_chart)
 
@@ -2409,7 +2441,7 @@ def _render_history_star_validation(evaluation: pd.DataFrame) -> None:
     else:
         summary = summary.sort_values(["latest_star_date", "code"], ascending=[False, True])
     _render_history_sortable_stock_table(summary, "star_summary")
-    st.caption("return_*_avg は同じ銘柄の◎☆開始イベントのうち、その期間の実績が確定済みのものだけを平均した値（%）です。completed_*d は平均に含めたイベント数です。")
+    st.caption("各期間の平均は、その日数分の株価データがそろった記録だけで計算しています。隣の件数は、その平均に含めた記録数です。同じ銘柄でも、◎☆になった日が違えば別々に数えます。")
 
     if st.checkbox("◎☆開始イベントを個別表示する", value=False, key="show_star_event_details", help="銘柄別の集約ではなく、◎☆になった日ごとの実績を表示します。"):
         event_show = star_events.copy()
@@ -2739,9 +2771,8 @@ def _render_history_walk_forward() -> None:
     _analysis_dataframe(display, width="stretch", hide_index=True)
     _render_walk_forward_comparison_chart(display)
     st.caption(
-        "選択効果 = 選ばれた候補の実績 − 類似していた非選択銘柄の平均実績。"
-        "青と赤の棒は横並びで比較し、紫の菱形は両者の差を表します。各系列は積み上げていません。"
-        "0%線より上ならプラス、選択効果が0より上なら候補が比較銘柄を上回ったことを示します。"
+        "青い棒は候補に選ばれた銘柄、赤い棒は条件が似ていたが選ばれなかった銘柄の平均株価変化です。紫の印は両者の差で、0より上なら候補側の成績が上でした。"
+        "横の棒はそれぞれの平均を表し、積み上げていません。これは過去の比較で、選び方が差の原因だと証明するものではありません。"
     )
 
     available_horizons = [
@@ -2763,8 +2794,8 @@ def _render_history_walk_forward() -> None:
     st.markdown("#### 判定段階別の成績")
     _analysis_dataframe(shown_cohort, width="stretch", hide_index=True)
     st.caption(
-        "同じ定量候補を、定量候補全体 → 旧◎☆条件 → 反転確認済み◎☆の順に絞った比較です。"
-        "件数が少ない段階ほど偶然の影響が大きいため、平均だけでなく中央値・プラス率・5%以上下落率も確認してください。"
+        "同じ候補を、全候補・以前の◎☆条件・株価の反転も確認した◎☆の3段階で比べます。平均は全体の平均、中央値は真ん中の値、プラス率は値上がりした割合です。"
+        "5%以上下落率は大きく下がった割合です。件数が少ないと結果が偏りやすいので、件数も一緒に確認してください。"
     )
 
     timing = walk_forward_entry_timing_summary(
@@ -2777,8 +2808,8 @@ def _render_history_walk_forward() -> None:
         st.markdown("#### 反転確認済み◎☆の買付タイミング比較")
         _analysis_dataframe(shown_timing, width="stretch", hide_index=True)
         st.caption(
-            "選定日終値で入る場合と、選定後3/5取引日待って終値で入る場合を比較します。"
-            "待機後から同じ取引日数を測り、判定条件には待機中の将来データを混ぜません。売買推奨ではありません。"
+            "候補になった日の終値を基準にする場合と、3日または5営業日待ってからを基準にする場合の過去成績を比べます。"
+            "どの場合も基準日から同じ日数後までを測っています。待っている間の値動きで候補条件は変えていません。売買を勧める結果ではありません。"
         )
     else:
         st.info("この期間には成績を確定できる反転確認済み◎☆がなく、買付タイミング比較は表示できません。")
@@ -2791,8 +2822,8 @@ def _render_history_walk_forward() -> None:
         st.markdown("#### 外因説明率と30取引日後実績")
         _analysis_dataframe(shown, width="stretch", hide_index=True)
         st.caption(
-            "外因説明率は6カ月下落を『市場＋業種』と『企業固有』に分解した記述統計です。"
-            "高いほど市場・業種の下落で説明できる割合が大きいことを示しますが、因果関係の証明ではありません。"
+            "この割合は、過去6か月の下落のうち、市場全体や同じ業種の値下がりと重なっていた分の目安です。"
+            "高くても外的要因が原因だと証明されたわけではありません。会社の発表などを別に確認してください。"
         )
 
     if st.checkbox("Walk-Forwardイベント詳細を表示", value=False, key="wf_details", help="過去の候補を選定日・銘柄単位で確認します。列名にマウスを置くと意味を表示します。"):
@@ -3114,16 +3145,16 @@ def render_stock_search() -> None:
     st.caption("これは買い推奨や利益保証ではありません。定量データと確認状況を整理し、見落としを減らすための判断補助です。")
 
     summary_cols = st.columns(4)
-    summary_cols[0].metric("定量根拠の充足度", f"{readiness['evidence_score']}%", help="利用可能な定量項目のうち、買付検討に有利な条件がどの程度揃っているかを重み付きで表した参考値です。将来の利益確率ではありません。")
-    summary_cols[1].metric("有利な材料", f"{len(readiness['positives'])}件", help="現在の取得済みデータで、買付検討を支える方向に働く確認項目数です。")
-    summary_cols[2].metric("注意・不足", f"{len(readiness['warnings'])}件", help="データ不足や追加の人手確認が必要な項目数です。")
-    summary_cols[3].metric("反対材料", f"{len(readiness['failures'])}件", help="現在の投資仮説に反する、または買付を止める方向の項目数です。")
+    summary_cols[0].metric("数値条件の確認状況", f"{readiness['evidence_score']}%", help="取得できた数字の条件を、あらかじめ決めた重要度でまとめた目安です。値上がりする確率や利益の大きさではありません。")
+    summary_cols[1].metric("良い材料", f"{len(readiness['positives'])}件", help="現在のデータで、会社や株価について良い傾向が見つかった項目数です。")
+    summary_cols[2].metric("要確認・データ不足", f"{len(readiness['warnings'])}件", help="数字が足りないか、人が資料を見て確かめる必要がある項目数です。")
+    summary_cols[3].metric("気になる材料", f"{len(readiness['failures'])}件", help="現在のデータで、会社や株価について注意が必要と判定された項目数です。")
 
     current_price_for_plan = float(external_quote["price"]) if external_quote and external_quote.get("price") else (float(jq_close) if not pd.isna(jq_close) else 0.0)
     entry_guidance = build_entry_price_guidance(current_price_for_plan, trend_snapshot, trend_transition)
 
     st.markdown("### 株価トレンドと売買タイミング")
-    st.caption(f"トレンド判定データ: {trend_data_label}")
+    st.caption(f"株価の動きを確認したデータ: {trend_data_label}。株価の過去の傾向を示すもので、今後の値上がりを保証しません。")
     transition_cols = st.columns(4)
     transition_cols[0].metric("約3カ月前", trend_transition.get("previous_state", "-"), help="最新外部日足から約90日前までの履歴で計算したトレンド状態です。")
     transition_cols[1].metric("現在", trend_transition.get("current_state", "-"), help="取得可能な最新の日足系列によるトレンド状態です。")

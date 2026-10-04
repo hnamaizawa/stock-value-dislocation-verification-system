@@ -194,7 +194,7 @@ def build_trend_transition(prices: pd.DataFrame, lookback_days: int = 90) -> dic
             "previous": {"trend_state": "データ不足", "trend_score": 0},
             "transition_state": "判定不能",
             "escaped_downtrend": False,
-            "summary": "最新株価履歴がありません。",
+            "summary": "株価の履歴がないため、最近の上げ下げを確認できません。",
         }
     frame = prices.copy()
     date_col = "date" if "date" in frame.columns else "Date"
@@ -217,28 +217,28 @@ def build_trend_transition(prices: pd.DataFrame, lookback_days: int = 90) -> dic
 
     if was_down and current_score >= 5:
         transition = "下降トレンドから上昇転換を確認"
-        summary = "約3カ月前は下降基調でしたが、最新系列では複数の上昇条件を満たしています。"
+        summary = "約3カ月前は株価が下がり気味でしたが、最近は上向きを示す動きがいくつも見られます。上昇が続くとは限らないため、引き続き確認してください。"
     elif was_down and now_positive:
         transition = "下降トレンド脱出の可能性"
-        summary = "約3カ月前の下降基調から改善し、最新系列では上昇転換の兆候があります。"
+        summary = "約3カ月前より株価の動きは改善し、上向きに変わる兆しがあります。まだ上昇が続くかは分からないため、続けて確認してください。"
     elif was_down and now_neutral:
         transition = "底打ち・下げ止まりの兆候"
-        summary = "下降の勢いは弱まりましたが、上昇転換の確認には追加の値動きが必要です。"
+        summary = "株価の下がり方は弱まっていますが、上昇に変わったとはまだ言えません。今後の値動きを確認してください。"
     elif was_down and current_score <= -2:
         transition = "下降トレンド継続"
-        summary = "約3カ月前から最新時点まで下降基調が継続しています。"
+        summary = "約3カ月前から最近まで、株価が下がり気味の状態が続いています。"
     elif previous_score < current_score and now_positive:
         transition = "上昇基調が改善"
-        summary = "3カ月前よりトレンド指標が改善し、最新時点では上向きです。"
+        summary = "約3カ月前より株価の動きが改善し、最近は上向きです。"
     elif current_score >= 2:
         transition = "上昇トレンド"
-        summary = "最新時点では上昇条件が優勢です。"
+        summary = "最近の株価には上向きの動きが見られます。"
     elif current_score <= -2:
         transition = "下降トレンド"
-        summary = "最新時点では下降条件が優勢です。"
+        summary = "最近の株価には下向きの動きが見られます。"
     else:
         transition = "方向感なし・確認待ち"
-        summary = "最新時点では明確な上昇・下降の優位性を確認できません。"
+        summary = "最近の値動きだけでは、上向きか下向きかをはっきり判断できません。"
 
     return {
         "current": current,
