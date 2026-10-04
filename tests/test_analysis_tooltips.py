@@ -34,7 +34,7 @@ def test_sortable_table_headers_explain_meaning_and_sort_action():
 
 
 def test_analysis_result_help_explains_plain_meaning_and_limits():
-    source = Path("dashboard.py").read_text(encoding="utf-8")
+    source = Path("dashboard.py").read_text(encoding="utf-8") + Path("src/value_dislocation/strategy/profiles.py").read_text(encoding="utf-8")
     required = [
         '"中央値": "値動きを順に並べたときの真ん中の値です。',
         '"プラス率": "対象の記録のうち、株価が上がった割合です。',
