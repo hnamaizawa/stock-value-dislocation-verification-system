@@ -54,6 +54,9 @@ def security_return_bubbles(
     y_horizon: int,
 ) -> pd.DataFrame:
     """Aggregate event returns by security for a two-horizon bubble chart."""
+    result_columns = ["code", "name", "横軸リターン(%)", "縦軸リターン(%)", "◎☆回数", "比較可能件数"]
+    if x_horizon == y_horizon:
+        return pd.DataFrame(columns=result_columns)
     columns = ["code", "name", f"return_{x_horizon}d", f"return_{y_horizon}d"]
     if events is None or events.empty or not set(columns).issubset(events.columns):
         return pd.DataFrame(
