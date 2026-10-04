@@ -12,7 +12,7 @@ For every replay date:
 1. Price features use rows with `date <= replay_date`.
 2. Financial features use rows with `disclosure_date <= replay_date`.
 3. Selection is completed before any future price is joined.
-4. 10/20/30/60/90/180 **trading-session** returns are used only to score the already-selected event.
+4. The target horizons are 10/20/30/60/90/120/240/365 **trading sessions**. Forward returns are used only to score the already-selected event.
 5. The newest historical security-master snapshot on or before the replay date defines the company universe.
 6. No J-Quants or Yahoo fetch is triggered by Walk-Forward execution; it uses certified local data only.
 
@@ -63,7 +63,10 @@ claim complete elimination of survivorship bias.
 ## Horizon convention
 
 A horizon of N days means the Nth available trading session strictly after the selection
-date. `actual_days_Nd` remains the observed calendar-day distance for audit purposes.
+date. `actual_days_Nd` remains the observed calendar-day distance for audit purposes. The
+current implementation supports 10/20/30/60/90/180 sessions; 120/240/365 are goal-alignment
+work and must not be presented as available until implemented and verified. Unsupported
+horizons must remain visibly unavailable when local history cannot support them.
 
 
 ## v0.6.65 performance model
