@@ -30,7 +30,7 @@ def test_evaluation_history_text_summary_describes_distribution():
     lines = evaluation_history_text_summary(frame)
     assert any("3 回" in line or "3回" in line for line in lines)
     assert any("◎☆・◎" in line and "条件が比較的そろった候補" in line for line in lines)
-    assert any("後日補完" in line for line in lines)
+    assert any("後から追加した評価" in line for line in lines)
 
 
 def test_star_validation_text_summary_uses_matured_returns_and_conditions():
