@@ -835,7 +835,8 @@ def _render_history_analytical_visuals(star_events: pd.DataFrame, perf: pd.DataF
         x_days = int(x_label.removesuffix("日"))
         y_days = int(y_label.removesuffix("日"))
         if x_days == y_days:
-            st.info("異なる2期間を選ぶと、短期と中長期の動きの違いを比較できます。")
+            st.info("横軸と縦軸に同じ期間は選べません。短期と中長期を比べるため、異なる期間を選んでください。")
+            return
         bubbles = security_return_bubbles(star_events, x_days, y_days)
         if bubbles.empty:
             st.info("選択した2期間がともに確定した銘柄実績がまだありません。")
