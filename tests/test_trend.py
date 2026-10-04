@@ -38,6 +38,8 @@ def test_trend_transition_detects_escape_from_prior_downtrend():
         "上昇基調が改善",
         "上昇トレンド",
     }
+    assert "株価の動き" in result["summary"]
+    assert "トレンド指標" not in result["summary"]
 
 
 def test_trend_transition_emits_no_deprecation_warning():

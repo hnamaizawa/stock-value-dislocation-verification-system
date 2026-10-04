@@ -824,54 +824,54 @@ def _summary_date_span(frame: pd.DataFrame, column: str) -> str:
 def daily_history_text_summary(history: pd.DataFrame) -> list[str]:
     """Build a short deterministic summary for the filtered daily-history view."""
     if history is None or history.empty:
-        return ["現在の条件に該当する日次分析履歴はありません。"]
+        return ["今の検索条件に合う日々の分析記録はありません。条件か表示期間を変えて確認してください。"]
     frame = history.copy()
     codes = _summary_text_column(frame, "code")
     unique_codes = int(codes.loc[codes.ne("")].nunique())
-    lines = [f"表示中は {len(frame):,} 件（{unique_codes:,} 銘柄）、対象期間は {_summary_date_span(frame, 'analysis_date')} です。"]
+    lines = [f"表示中は {len(frame):,} 回分の分析記録（{unique_codes:,} 銘柄）です。期間は {_summary_date_span(frame, 'analysis_date')} です。"]
     symbols = _summary_text_column(frame, "final_evaluation")
     symbol_counts = symbols.loc[symbols.ne("")].value_counts()
     if not symbol_counts.empty:
         top_symbol = str(symbol_counts.index[0])
         top_count = int(symbol_counts.iloc[0])
-        lines.append(f"最終評価では「{top_symbol}」が最多で {top_count:,} 件（{top_count / len(frame) * 100:.1f}%）です。")
+        lines.append(f"最も多い判定は「{top_symbol}」で、{top_count:,} 回（全体の {top_count / len(frame) * 100:.1f}%）でした。")
     positive = int(symbols.isin(["◎☆", "◎", "○"]).sum())
     cautious = int(symbols.isin(["△", "×"]).sum())
     if positive or cautious:
-        lines.append(f"◎☆/◎/○ は計 {positive:,} 件、△/× は計 {cautious:,} 件です。")
+        lines.append(f"◎☆・◎・○（候補として表示）は {positive:,} 回、△・×（慎重または見送り）は {cautious:,} 回です。判定は将来の値上がりを保証しません。")
     statuses = _summary_text_column(frame, "evaluation_status")
     unassessed = int(statuses.eq("未評価").sum())
     if unassessed:
         reasons = _summary_text_column(frame.loc[statuses.eq("未評価")], "unassessed_reason")
         reason_counts = reasons.loc[reasons.ne("")].value_counts()
-        reason_text = f" 主因は「{reason_counts.index[0]}」です。" if not reason_counts.empty else ""
-        lines.append(f"未評価が {unassessed:,} 件（{unassessed / len(frame) * 100:.1f}%）残っています。{reason_text}".strip())
+        reason_text = f" 主な理由は「{reason_counts.index[0]}」です。" if not reason_counts.empty else ""
+        lines.append(f"判定できなかった記録が {unassessed:,} 回（{unassessed / len(frame) * 100:.1f}%）あります。{reason_text}".strip())
     return lines[:4]
 
 
 def evaluation_history_text_summary(evaluations: pd.DataFrame) -> list[str]:
     """Build a short deterministic summary for the filtered final-evaluation history."""
     if evaluations is None or evaluations.empty:
-        return ["現在の条件に該当する評価履歴はありません。"]
+        return ["今の検索条件に合う評価記録はありません。条件か表示期間を変えて確認してください。"]
     frame = evaluations.copy()
     codes = _summary_text_column(frame, "code")
     unique_codes = int(codes.loc[codes.ne("")].nunique())
-    lines = [f"表示中は {len(frame):,} 件（{unique_codes:,} 銘柄）、評価日は {_summary_date_span(frame, 'evaluation_date')} です。"]
+    lines = [f"表示中は {len(frame):,} 回分の評価（{unique_codes:,} 銘柄）です。評価日は {_summary_date_span(frame, 'evaluation_date')} です。"]
     symbols = _summary_text_column(frame, "intuitive_symbol")
     counts = symbols.loc[symbols.ne("")].value_counts()
     if not counts.empty:
         top_symbol = str(counts.index[0])
         top_count = int(counts.iloc[0])
-        lines.append(f"保存評価では「{top_symbol}」が最多で {top_count:,} 件（{top_count / len(frame) * 100:.1f}%）です。")
+        lines.append(f"最も多い判定は「{top_symbol}」で、{top_count:,} 回（全体の {top_count / len(frame) * 100:.1f}%）でした。")
     high = int(symbols.isin(["◎☆", "◎"]).sum())
     watch = int(symbols.isin(["○", "△"]).sum())
     avoid = int(symbols.eq("×").sum())
     if high or watch or avoid:
-        lines.append(f"◎☆/◎ は {high:,} 件、○/△ は {watch:,} 件、× は {avoid:,} 件です。")
+        lines.append(f"◎☆・◎（条件が比較的そろった候補）は {high:,} 回、○・△（追加確認・様子見）は {watch:,} 回、×（見送り）は {avoid:,} 回です。評価記号だけで売買を決めないでください。")
     statuses = _summary_text_column(frame, "evaluation_status")
     backfilled = int(statuses.eq("後日補完").sum())
     if backfilled:
-        lines.append(f"後日補完された評価が {backfilled:,} 件あり、当日評価とは区別して保存されています。")
+        lines.append(f"後から追加した評価が {backfilled:,} 回あります。当日の評価とは分けて記録しています。")
     return lines[:4]
 
 
@@ -884,10 +884,10 @@ def star_validation_text_summary(
 ) -> list[str]:
     """Build a compact non-causal summary of ◎☆ forward-return validation."""
     if events is None or events.empty:
-        return ["◎☆開始イベントがまだないため、実績サマリを作成できません。"]
+        return ["◎☆の評価記録がまだありません。記録が保存されると、その後の株価の動きを確認できます。"]
     codes = _summary_text_column(events, "code")
     unique_codes = int(codes.loc[codes.ne("")].nunique())
-    lines = [f"◎☆開始イベントは {len(events):,} 件、対象は {unique_codes:,} 銘柄です。"]
+    lines = [f"◎☆になった記録は {len(events):,} 回分、対象は {unique_codes:,} 銘柄です。同じ銘柄が別の日に再び◎☆になった場合は、別々に数えています。"]
 
     forward = pd.DataFrame() if forward_summary is None else forward_summary.reset_index().copy()
     if not forward.empty and {"期間", "平均リターン(%)", "確定件数"}.issubset(forward.columns):
@@ -895,12 +895,12 @@ def star_validation_text_summary(
         forward["確定件数"] = pd.to_numeric(forward["確定件数"], errors="coerce").fillna(0)
         matured = forward.loc[(forward["確定件数"] > 0) & forward["平均リターン(%)"].notna()].copy()
         if matured.empty:
-            lines.append("10〜180日の将来リターンはまだ十分に確定していません。")
+            lines.append("評価後の株価データがそろい、成績を確定できた期間はまだありません。")
         else:
             best = matured.sort_values("平均リターン(%)", ascending=False).iloc[0]
-            lines.append(f"確定済み期間では {best['期間']} の平均リターンが最も高く {float(best['平均リターン(%)']):+.1f}%（{int(best['確定件数']):,}件）です。")
+            lines.append(f"成績を確認できた中では、{best['期間']}後の平均株価変化が最も高く {float(best['平均リターン(%)']):+.1f}% でした（{int(best['確定件数']):,}回分）。これは過去の平均で、今後の値動きを約束するものではありません。")
             positive_periods = int((matured["平均リターン(%)"] > 0).sum())
-            lines.append(f"平均リターンがプラスの期間は、確定済み {len(matured):,} 期間中 {positive_periods:,} 期間です。")
+            lines.append(f"確認できた {len(matured):,} 期間のうち、平均株価変化がプラスだったのは {positive_periods:,} 期間です。")
 
     comparison = events.attrs.get("star_rule_comparison") if hasattr(events, "attrs") else None
     if isinstance(comparison, pd.DataFrame) and not comparison.empty and "判定方式" in comparison.columns:
@@ -911,17 +911,17 @@ def star_validation_text_summary(
             r = reversal.iloc[0]
             coverage_start = comparison.attrs.get("coverage_start", "v0.6.61導入後")
             lines.append(
-                f"新旧ルール比較（{coverage_start}以降・保存評価ベース）: 旧◎☆条件 {int(l['開始イベント数']):,} 件、反転確認◎☆ {int(r['開始イベント数']):,} 件です。"
+                f"◎☆の条件を厳しくする前後の記録数（{coverage_start}以降）: 以前の条件は {int(l['開始イベント数']):,} 回、株価の反転も確認する条件は {int(r['開始イベント数']):,} 回です。"
             )
             if int(l.get("20日確定件数", 0) or 0) and int(r.get("20日確定件数", 0) or 0):
                 lines.append(
-                    "20日実績は旧条件 "
-                    f"平均 {float(l['20日平均']) * 100:+.1f}% / プラス率 {float(l['20日プラス率']) * 100:.1f}%、"
-                    "反転確認条件 "
-                    f"平均 {float(r['20日平均']) * 100:+.1f}% / プラス率 {float(r['20日プラス率']) * 100:.1f}%です。"
+                    "20取引日後の株価変化は、以前の条件が "
+                    f"平均 {float(l['20日平均']) * 100:+.1f}%・上昇した割合 {float(l['20日プラス率']) * 100:.1f}%、"
+                    "反転も確認する条件が "
+                    f"平均 {float(r['20日平均']) * 100:+.1f}%・上昇した割合 {float(r['20日プラス率']) * 100:.1f}%です。記録数の違いにも注意してください。"
                 )
             else:
-                lines.append("新旧ルールの20日比較は、反転確認◎☆の実績が確定するまで蓄積中です。")
+                lines.append("2つの条件の20取引日後の比較は、株価データがそろうまで確認中です。")
 
     perf = pd.DataFrame() if condition_perf is None else condition_perf.copy()
     avg_col = f"{condition_horizon}日平均"
@@ -932,7 +932,7 @@ def star_validation_text_summary(
         usable = perf.loc[(perf[count_col] > 0) & perf[avg_col].notna()].copy()
         if not usable.empty:
             best_condition = usable.sort_values(avg_col, ascending=False).iloc[0]
-            lines.append(f"条件別では「{best_condition['条件']}」の{condition_horizon}日平均が最も高く {float(best_condition[avg_col]) * 100:+.1f}%（{int(best_condition[count_col]):,}件）です。因果関係ではなく参考傾向です。")
+            lines.append(f"条件ごとに比べると「{best_condition['条件']}」に当てはまった記録は、{condition_horizon}取引日後の平均株価変化が最も高く {float(best_condition[avg_col]) * 100:+.1f}% でした（{int(best_condition[count_col]):,}回分）。条件が値上がりの原因だと示すものではありません。")
     return lines[:7]
 
 

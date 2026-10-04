@@ -129,19 +129,19 @@ def build_buy_readiness(
     if hard_failures:
         decision = "見送り優先"
         decision_level = "stop"
-        reason = "財務・キャッシュフロー・会社予想などに重要な弱点があります。"
+        reason = "会社の財務や本業の数字、利益の見込みに大きな心配があります。"
     elif evidence_score >= 75 and external_quote_available:
         decision = "追加確認後に条件付きで検討"
         decision_level = "consider"
-        reason = "定量面の根拠は比較的揃っていますが、外的要因と最新開示の人手確認が必要です。"
+        reason = "数字の上では良い点が多くありますが、株価が下がった理由や最新の会社発表を人が確認してください。"
     elif evidence_score >= 55:
         decision = "調査継続"
         decision_level = "research"
-        reason = "有利な材料と注意材料が混在しています。未確認事項を解消してから判断してください。"
+        reason = "良い点と気になる点の両方があります。まだ確認できていない情報を調べてから判断してください。"
     else:
         decision = "現時点では見送り"
         decision_level = "stop"
-        reason = "買付判断を支える定量根拠が十分ではありません。"
+        reason = "現在わかっている数字だけでは、投資を考える材料が十分ではありません。"
 
     return {
         "decision": decision,
@@ -205,6 +205,14 @@ def build_intuitive_signal(readiness: dict[str, Any], trend_transition: dict[str
     }
     reversal_star = bool(legacy_star and all(reversal_checks.values()))
 
+    reversal_missing_labels = {
+        "trend_score_at_least_5": "株価全体の上向きがまだ十分強くない",
+        "return_20d_nonnegative": "直近20営業日の株価が下がっている",
+        "price_above_sma20": "現在の株価が直近20営業日の平均より低い",
+        "sma20_rising": "直近20営業日の平均株価がまだ上向いていない",
+        "sma20_above_sma50": "短期の平均株価が中期の平均をまだ上回っていない",
+    }
+
     metadata = {
         "star": reversal_star,
         "legacy_star": legacy_star,
@@ -219,43 +227,43 @@ def build_intuitive_signal(readiness: dict[str, Any], trend_transition: dict[str
                 "symbol": "◎☆",
                 "label": "反転確認済み候補",
                 "detail": (
-                    "主要な財務・業績項目に明確な欠点がなく、反転確認条件（トレンドスコア5以上、"
-                    "20日騰落率0%以上、株価>MA20、MA20上向き、MA20>MA50）も満たしています。"
+                    "業績・財務に大きな問題が見つからず、最近の株価も上向きに変わったことを示す条件がそろっています。"
+                    "これは過去の値動きによる目安で、今後の上昇を保証しません。"
                 ),
                 **metadata,
             }
         if legacy_star:
-            missing = [key for key, ok in reversal_checks.items() if not ok]
+            missing = [reversal_missing_labels[key] for key, ok in reversal_checks.items() if not ok]
             return {
                 "symbol": "◎",
                 "label": "買い候補（反転確認待ち）",
-                "detail": "旧◎☆条件相当ですが、反転確認条件が未達です。未達: " + ", ".join(missing),
+                "detail": "業績・財務の条件はそろっていますが、株価が上向きに変わったことはまだ確認できていません。確認点: " + "、".join(missing),
                 **metadata,
             }
         return {
             "symbol": "◎",
             "label": "買い候補",
-            "detail": "定量条件が比較的揃い、最新トレンドにも改善・上向きの兆候があります。",
+            "detail": "業績・財務や株価の条件が比較的そろい、最近の値動きにも改善の兆しがあります。今後の値上がりを保証するものではありません。",
             **metadata,
         }
     if level == "consider":
         return {
             "symbol": "○",
             "label": "条件付き候補",
-            "detail": "定量条件は比較的良好ですが、最新トレンドまたは人手確認が不足しています。",
+            "detail": "数字の上では良い点がありますが、最近の株価の動きか、人による確認がまだ足りません。",
             **metadata,
         }
     if level == "research":
         return {
             "symbol": "△",
             "label": "様子見",
-            "detail": "有利材料と注意材料が混在しています。追加確認または値動きの改善を待ちます。",
+            "detail": "良い点と気になる点の両方があります。会社の情報を追加で確認するか、株価の動きが改善するか待つ状態です。",
             **metadata,
         }
     return {
         "symbol": "×",
         "label": "見送り",
-        "detail": "重要な弱点または明確な下降トレンドがあり、現時点では買いを急がない状態です。",
+        "detail": "会社の数字に大きな弱点があるか、株価が下がり続けています。今の時点では買いを急がず、状況を確認してください。",
         **metadata,
     }
 

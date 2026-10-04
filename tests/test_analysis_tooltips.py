@@ -32,3 +32,15 @@ def test_sortable_table_headers_explain_meaning_and_sort_action():
     assert '_analysis_help(field, _analysis_help(label))' in source
     assert "クリックで昇順／降順を切り替えます。" in source
 
+
+def test_analysis_result_help_explains_plain_meaning_and_limits():
+    source = Path("dashboard.py").read_text(encoding="utf-8")
+    required = [
+        '"中央値": "値動きを順に並べたときの真ん中の値です。',
+        '"プラス率": "対象の記録のうち、株価が上がった割合です。',
+        '"確定件数": "選んだ日数分の株価データがそろい、成績を計算できた記録数です。',
+        '"選択効果": "選ばれた銘柄と、条件が似ていた非候補の成績の差です。',
+        '"external_shock_ratio": "株価の下落のうち、市場全体や同じ業種の値動きと重なっていた割合',
+        '"minimum_volatility_60d": "直近60営業日の終値の動きから、値動きの大きさを年換算した目安です。',
+    ]
+    assert not [item for item in required if item not in source]
