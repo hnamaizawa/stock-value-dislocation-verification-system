@@ -13,6 +13,7 @@ universe:
 
 screen:
   selection_strategy: value_dislocation
+  quantitative_min_score: 70
   minimum_volatility_60d: 0.35
   minimum_average_intraday_range_20d: 0.025
   minimum_daytrade_activity_score: 50
