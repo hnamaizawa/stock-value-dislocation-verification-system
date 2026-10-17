@@ -7,6 +7,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+from .scoring import LEGACY_REVIEW_PENALTY_POINTS, QUANTITATIVE_SCORE_SCALE
+
 
 PROFILE_SCHEMA_VERSION = "1.0"
 
@@ -25,7 +27,7 @@ METRIC_HELP = {
     "maximum_forecast_op_decline": "会社が予想する営業利益が、直近の実績よりどれだけ減ってよいかを設定します。",
     "minimum_drawdown_52w": "今の株価が過去52週間の最高値から、少なくともどれだけ下がった銘柄を探すかです。",
     "minimum_relative_underperformance_6m": "過去6か月で、銘柄の株価が市場全体よりどれだけ弱かったかを見ます。市場の目安は正式TOPIXを優先し、使えない場合はTOPIX連動ETFで代用します。",
-    "quantitative_min_score": "財務や株価など、設定した数値条件への当てはまりを点数にしたものです。外的要因が原因かどうかは点数に含みません。",
+    "quantitative_min_score": "財務や株価への当てはまりを示す0〜85点の点数です。人手レビューや根拠URLの有無では減点せず、財務上の問題は減点します。外的要因の原因を証明する点数ではありません。",
     "minimum_forecast_dividend_yield": "会社予想の年間配当を今の株価で割った割合です。高い場合は、配当が減る可能性も確認してください。",
     "maximum_payout_ratio": "利益のうち、配当に回す割合です。割合が高すぎると、配当を続けにくくなることがあります。",
     "minimum_volatility_60d": "直近60営業日の終値の動きから、値動きの大きさを年換算した目安です。数字が大きいほど、株価が大きく上下する傾向があります。",
@@ -67,7 +69,7 @@ PRESETS: dict[str, dict[str, Any]] = {
             "maximum_forecast_dividend_yield": 0.06,
             "maximum_payout_ratio": 0.60,
             "exclude_forecast_dividend_cut": True,
-            "quantitative_min_score": 48,
+            "quantitative_min_score": 76,
             "max_review_queue": 30,
         },
     },
@@ -105,7 +107,7 @@ PRESETS: dict[str, dict[str, Any]] = {
             "maximum_forecast_dividend_yield": 0.10,
             "maximum_payout_ratio": 0.80,
             "exclude_forecast_dividend_cut": False,
-            "quantitative_min_score": 42,
+            "quantitative_min_score": 70,
             "max_review_queue": 50,
         },
     },
@@ -143,7 +145,7 @@ PRESETS: dict[str, dict[str, Any]] = {
             "maximum_forecast_dividend_yield": 0.08,
             "maximum_payout_ratio": 0.80,
             "exclude_forecast_dividend_cut": False,
-            "quantitative_min_score": 36,
+            "quantitative_min_score": 64,
             "max_review_queue": 80,
         },
     },
@@ -169,6 +171,7 @@ def normalize_profile_name(value: str) -> str:
 def profile_document(name: str, preset: str, overrides: dict[str, Any]) -> dict[str, Any]:
     return {
         "schema_version": PROFILE_SCHEMA_VERSION,
+        "score_scale": QUANTITATIVE_SCORE_SCALE,
         "profile_name": name,
         "preset": preset,
         "saved_at": datetime.now().astimezone().isoformat(),
@@ -194,10 +197,18 @@ def list_profiles(directory: Path) -> list[Path]:
 
 
 def load_profile(path: Path) -> dict[str, Any]:
-    data = json.loads(path.read_text(encoding="utf-8"))
+    data = deepcopy(json.loads(path.read_text(encoding="utf-8")))
     if data.get("schema_version") != PROFILE_SCHEMA_VERSION:
         raise ValueError("Unsupported profile schema version")
     overrides = data.get("overrides")
     if not isinstance(overrides, dict) or not isinstance(overrides.get("universe"), dict) or not isinstance(overrides.get("screen"), dict):
         raise ValueError("Invalid profile structure")
+    if "score_scale" not in data:
+        screen = overrides.get("screen", {})
+        threshold = screen.get("quantitative_min_score")
+        if threshold is not None:
+            screen["quantitative_min_score"] = min(85, float(threshold) + LEGACY_REVIEW_PENALTY_POINTS)
+        data["score_scale"] = QUANTITATIVE_SCORE_SCALE
+    elif data["score_scale"] != QUANTITATIVE_SCORE_SCALE:
+        raise ValueError("Unsupported profile score scale")
     return data
