@@ -93,12 +93,7 @@ def prepare_quantitative_universe(
         / pd.to_numeric(scored.get("close"), errors="coerce"),
         np.nan,
     )
-    scored["quantitative_score"] = (
-        scored["quality_score"]
-        + scored["valuation_score"]
-        + scored["dislocation_score"]
-        - scored["penalty"]
-    )
+    scored["quantitative_score"] = scored["quantitative_score"].clip(0, 85)
     return scored
 
 
@@ -315,7 +310,7 @@ def apply_quantitative_criteria(
 
     hard_columns = REQUIRED_CHECK_COLUMNS + ["pass_structural_deterioration_guard", "pass_dividend_conditions"]
     scored["hard_filter_pass"] = scored[hard_columns].all(axis=1)
-    minimum_score = float(s.get("quantitative_min_score", 42))
+    minimum_score = float(s.get("quantitative_min_score", 70))
     scored["pass_quantitative_score"] = scored["quantitative_score"] >= minimum_score
     if selection_strategy == "active_trading":
         scored["strategy_score"] = scored["daytrade_activity_score"]

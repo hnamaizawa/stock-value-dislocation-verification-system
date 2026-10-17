@@ -53,6 +53,11 @@ def test_result_cache_round_trip_and_key_invalidation(tmp_path):
         app_version="0.6.65",
     )
     assert key != changed
+    # Appending the scale to the cache identity prevents old score results being reused.
+    assert walk_forward_cache_key(
+        data_signature="data-a", config={"screen": {"minimum_score": 4}},
+        settings=settings, horizons=(10, 30, 90), app_version="0.6.76",
+    ) != key
     events = pd.DataFrame([{"selection_date": "2026-01-09", "code": "A", "return_10d": 0.1}])
     save_walk_forward_result(tmp_path, key, events)
     loaded = load_walk_forward_result(tmp_path, key)

@@ -352,3 +352,11 @@ Version 0.5.1 implements the immediate performance and SBI CSV bridge improvemen
 - [x] 回帰テスト・Harness・blueprint・文書を更新する
 
 ## v0.6.74 Walk-Forward uses applied screen conditions
+# v0.6.77 定量スコア尺度移行（A）
+
+- [x] 定量スコアからレビュー・URL一律減点を分離し、財務減点を維持する。
+- [x] 旧42点相当を新70点へ移し、各プリセットと設定・UI・学習探索範囲を整合する。
+- [x] 保存済みプロファイルと履歴は読み込み時だけ変換し、元ファイルを保持する。
+- [x] デイトレード活動スコアを変換対象から除外し、Walk-Forwardキャッシュを更新する。
+- [x] 候補同一性、履歴移行、プロファイル一度限り移行のテストを追加。
+- [ ] B〜Eは未着手。Aの確認後に別作業単位で進める。

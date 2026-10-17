@@ -18,6 +18,33 @@ def test_daily_analysis_snapshot_overwrites_same_day(tmp_path: Path):
     assert loaded.iloc[0]["strategy_score"]==70.0
 
 
+def test_legacy_analysis_history_scores_upgrade_in_memory_only(tmp_path: Path):
+    folder = tmp_path / "data" / "history" / "analysis"
+    folder.mkdir(parents=True)
+    path = folder / "2025-01-02.csv.gz"
+    pd.DataFrame([{
+        "analysis_date": "2025-01-02", "code": "11110", "selection_strategy": "value_dislocation",
+        "quantitative_score": 42.0, "strategy_score": 42.0,
+    }]).to_csv(path, index=False, compression="gzip")
+    original = path.read_bytes()
+    loaded = load_analysis_history(tmp_path)
+    assert loaded.iloc[0]["quantitative_score"] == 70.0
+    assert loaded.iloc[0]["strategy_score"] == 70.0
+    assert path.read_bytes() == original
+
+
+def test_legacy_active_trading_score_is_not_converted(tmp_path: Path):
+    folder = tmp_path / "data" / "history" / "analysis"
+    folder.mkdir(parents=True)
+    pd.DataFrame([{
+        "analysis_date": "2025-01-02", "code": "11110", "selection_strategy": "active_trading",
+        "quantitative_score": 42.0, "strategy_score": 42.0,
+    }]).to_csv(folder / "2025-01-02.csv.gz", index=False, compression="gzip")
+    row = load_analysis_history(tmp_path).iloc[0]
+    assert row["quantitative_score"] == 42.0
+    assert row["strategy_score"] == 42.0
+
+
 def test_evaluation_upsert_and_star_forward_returns(tmp_path: Path):
     def save(day, symbol, price):
         frame=pd.DataFrame([{"raw_code":"72030","企業名":"A","市場":"Prime","直感判定":f"{symbol} 買い候補","最新株価":price,"selection_strategy":"value_dislocation"}])

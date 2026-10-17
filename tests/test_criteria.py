@@ -154,3 +154,33 @@ def test_official_topix_has_priority_over_etf_proxy_in_auto_mode():
     prices["topix_proxy_label"] = "NEXT FUNDS TOPIX連動型上場投信 (1306)"
     table = build_quantitative_table(_companies(), prices, _financials(), prices["date"].max(), _config())
     assert table.iloc[0]["benchmark_source"] == "official_topix"
+
+
+def test_legacy_42_and_new_70_thresholds_select_same_securities():
+    from value_dislocation.strategy.criteria import apply_quantitative_criteria
+
+    prepared = pd.DataFrame({
+        "code": ["A", "B", "C"], "market": ["Prime"] * 3,
+        "average_turnover_yen_20d": [10_000_000] * 3, "close": [1000] * 3,
+        "equity_ratio": [0.5] * 3, "operating_profit_latest": [100] * 3,
+        "operating_cf_positive_ratio_3y": [1.0] * 3, "sales_cagr_3y": [0.05] * 3,
+        "operating_margin": [0.1] * 3, "drawdown_52w": [-0.3] * 3,
+        "relative_return_6m": [-0.2] * 3, "forecast_op_growth": [0.1] * 3,
+        "forecast_dividend_yield": [0.0] * 3, "forecast_annual_dividend_per_share": [0.0] * 3,
+        "payout_ratio": [0.0] * 3, "forecast_dividend_change_rate": [0.0] * 3,
+        "cash_conversion_ratio": [1.0] * 3, "operating_margin_change_3y": [0.0] * 3,
+        "forecast_revision_rate": [0.0] * 3, "sector_relative_return_6m": [0.0] * 3,
+        "quantitative_score": [69.0, 70.0, 85.0], "daytrade_activity_score": [0.0] * 3,
+    })
+    base = _config()
+    base["screen"].update({"minimum_equity_ratio": 0, "minimum_operating_cf_positive_ratio_3y": 0,
+                           "minimum_sales_cagr_3y": -1, "minimum_operating_margin": -1,
+                           "minimum_drawdown_52w": 0, "minimum_relative_underperformance_6m": 0,
+                           "minimum_sector_relative_return_6m": -1, "quantitative_min_score": 70})
+    new = apply_quantitative_criteria(prepared, base)
+    legacy_representation = prepared.copy()
+    legacy_representation["quantitative_score"] -= 28
+    legacy = deepcopy(base)
+    legacy["screen"]["quantitative_min_score"] = 42
+    old = apply_quantitative_criteria(legacy_representation, legacy)
+    assert new.loc[new["selected_for_review"], "code"].tolist() == old.loc[old["selected_for_review"], "code"].tolist()

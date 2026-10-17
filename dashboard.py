@@ -361,7 +361,7 @@ ANALYSIS_ITEM_HELP = {
     "forecast_dividend_yield": METRIC_DESCRIPTIONS["forecast_dividend_yield"],
     "quantitative_score": "財務や株価など、設定した条件にどれだけ当てはまるかを点数にしたものです。高得点でも値上がりを保証しません。",
     "strategy_score": "選んだ探し方の条件にどれだけ当てはまるかを示す点数です。利益が出る確率ではありません。",
-    "定量スコア": "財務や株価など、設定した条件にどれだけ当てはまるかを点数にしたものです。高得点でも値上がりを保証しません。",
+    "定量スコア": "財務や株価の条件への当てはまりを示す0〜85点の点数です。外的要因の人手レビューや根拠URLの有無では減点せず、財務上の問題は減点します。高得点でも値上がりを保証しません。",
     "スコア": "設定した条件への当てはまりを比べる目安です。高いほど将来の利益が大きいという意味ではありません。",
     "selected_for_review": "定量条件を通過し、人が詳しく確認する候補になったかを示します。",
     "selection_strategy": "銘柄を探すときに選んだ方法です。「株価が下がった企業を探す」か「値動きが大きい銘柄を探す」かを表します。",
@@ -1914,7 +1914,7 @@ def render_condition_builder() -> None:
         st.markdown("### 6. 順位付けと表示件数")
         sc1, sc2, sc3 = st.columns(3)
         with sc1:
-            min_score = st.slider("定量スコア（点以上）", 0, 80, value=int(st.session_state["ui_min_score"]), step=1, disabled=active_mode, help=_analysis_help("定量スコア"))
+            min_score = st.slider("定量スコア（点以上）", 0, 85, value=int(st.session_state["ui_min_score"]), step=1, disabled=active_mode, help=_analysis_help("定量スコア"))
         with sc2:
             max_queue = st.slider("最大候補数", 5, 100, value=int(st.session_state["ui_max_queue"]), step=5, help="スコア上位から一覧へ残す候補銘柄数の上限です。")
         with sc3:

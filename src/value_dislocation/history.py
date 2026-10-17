@@ -6,8 +6,10 @@ from typing import Iterable
 
 import pandas as pd
 
+from .strategy.scoring import LEGACY_REVIEW_PENALTY_POINTS, QUANTITATIVE_SCORE_SCALE
+
 ANALYSIS_HISTORY_COLUMNS = [
-    "analysis_date", "data_as_of", "run_id", "code", "name", "market", "sector", "selection_strategy",
+    "analysis_date", "data_as_of", "run_id", "score_scale", "code", "name", "market", "sector", "selection_strategy",
     "selected_for_review", "strategy_score", "quantitative_score", "daytrade_activity_score",
     "close", "drawdown_52w", "relative_return_6m", "sector_relative_return_6m",
     "external_shock_attribution", "external_shock_attribution_score", "company_specific_component_6m",
@@ -139,6 +141,7 @@ def write_daily_analysis_snapshot(project_root: Path, audit: pd.DataFrame, *, an
     frame["analysis_date"] = day
     frame["data_as_of"] = pd.Timestamp(data_as_of).date().isoformat() if data_as_of is not None else day
     frame["run_id"] = str(run_id)
+    frame["score_scale"] = QUANTITATIVE_SCORE_SCALE
     frame["code"] = _safe_code_series(frame)
     cols = [c for c in ANALYSIS_HISTORY_COLUMNS if c in frame.columns]
     current_snapshot = frame[cols].copy()
@@ -196,8 +199,33 @@ def load_analysis_history(project_root: Path, *, start: date | None = None, end:
     if not frames:
         return pd.DataFrame()
     out = pd.concat(frames, ignore_index=True, sort=False)
+    out = normalize_analysis_history_score_scale(out)
     if selected_only and "selected_for_review" in out.columns:
         out = out.loc[_coerce_bool_series(out["selected_for_review"])].copy()
+    return out
+
+
+def normalize_analysis_history_score_scale(frame: pd.DataFrame) -> pd.DataFrame:
+    """Upgrade legacy value-dislocation scores in memory; never rewrite source files."""
+    out = frame.copy()
+    if out.empty:
+        return out
+    if "score_scale" not in out.columns:
+        out["score_scale"] = ""
+    scale = out.get("score_scale", pd.Series("", index=out.index)).fillna("").astype(str)
+    legacy = scale.ne(QUANTITATIVE_SCORE_SCALE)
+    strategy = out.get("selection_strategy", pd.Series("value_dislocation", index=out.index))
+    strategy = strategy.fillna("value_dislocation").astype(str).str.strip().str.lower()
+    value_rows = strategy.isin({"", "value_dislocation"})
+    for column in ("quantitative_score", "strategy_score"):
+        if column not in out.columns:
+            continue
+        mask = legacy & value_rows
+        values = pd.to_numeric(out[column], errors="coerce")
+        out.loc[mask & values.notna(), column] = values.loc[mask & values.notna()] + LEGACY_REVIEW_PENALTY_POINTS
+    out.loc[legacy & value_rows, "score_scale"] = QUANTITATIVE_SCORE_SCALE
+    active_legacy = legacy & ~value_rows
+    out.loc[active_legacy, "score_scale"] = "active_trading_v1"
     return out
 
 
