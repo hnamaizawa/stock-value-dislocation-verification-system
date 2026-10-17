@@ -1,4 +1,5 @@
 from pathlib import Path
+import json
 
 from value_dislocation.strategy.profiles import (
     PRESETS,
@@ -32,3 +33,18 @@ def test_profile_round_trip_and_safe_name(tmp_path: Path):
     assert document["preset"] == "標準"
     assert document["overrides"] == overrides
     assert list_profiles(tmp_path) == [path]
+
+
+def test_legacy_profile_without_score_scale_converts_once_without_rewriting_file(tmp_path: Path):
+    document = {
+        "schema_version": "1.0", "profile_name": "legacy", "preset": "標準",
+        "overrides": {"universe": {}, "screen": {"quantitative_min_score": 42}},
+    }
+    path = tmp_path / "legacy.json"
+    original = json.dumps(document, ensure_ascii=False).encode("utf-8")
+    path.write_bytes(original)
+    loaded = load_profile(path)
+    assert loaded["overrides"]["screen"]["quantitative_min_score"] == 70
+    assert loaded["score_scale"]
+    assert load_profile(path)["overrides"]["screen"]["quantitative_min_score"] == 70
+    assert path.read_bytes() == original
