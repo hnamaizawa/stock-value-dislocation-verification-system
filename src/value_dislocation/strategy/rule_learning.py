@@ -10,6 +10,8 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
+from ..history import normalize_analysis_history_score_scale
+
 
 @dataclass(frozen=True)
 class RuleSpec:
@@ -51,7 +53,7 @@ RULE_SPECS: tuple[RuleSpec, ...] = (
         0.0,
         True,
     ),
-    RuleSpec("quantitative_min_score", "quantitative_score", ">=", "定量スコア", 3.0, 20.0, 85.0, False, 1),
+    RuleSpec("quantitative_min_score", "quantitative_score", ">=", "定量スコア", 3.0, 48.0, 85.0, False, 1),
 )
 
 LEARNED_RULE_KEYS = {spec.config_key for spec in RULE_SPECS}
@@ -167,11 +169,11 @@ def _load_analysis(project_root: Path) -> pd.DataFrame:
             frames.append(frame)
     if not frames:
         return pd.DataFrame()
-    out = pd.concat(frames, ignore_index=True, sort=False)
+    out = normalize_analysis_history_score_scale(pd.concat(frames, ignore_index=True, sort=False))
     out["code"] = out.get("code", pd.Series(dtype=str)).astype(str)
     out["analysis_date"] = pd.to_datetime(out.get("analysis_date"), errors="coerce")
     if "selection_strategy" in out.columns:
-        out = out.loc[out["selection_strategy"].fillna("value_dislocation").astype(str) == "value_dislocation"].copy()
+        out = out.loc[out["selection_strategy"].fillna("value_dislocation").astype(str).isin({"", "value_dislocation"})].copy()
     return out.dropna(subset=["analysis_date", "code"])
 
 
