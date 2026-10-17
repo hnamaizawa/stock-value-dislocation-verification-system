@@ -62,7 +62,7 @@ screen:
   minimum_volatility_60d: 0.35
   minimum_average_intraday_range_20d: 0.025
   minimum_daytrade_activity_score: 50
-  quantitative_min_score: 42
+  quantitative_min_score: 70
   max_review_queue: 50
   min_score: 62
   max_candidates: 12
