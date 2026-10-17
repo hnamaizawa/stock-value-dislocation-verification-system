@@ -58,7 +58,7 @@ universe:
   exclude_negative_equity: true
 
 screen:
-  quantitative_min_score: 42
+  quantitative_min_score: 70
   max_review_queue: 50
   min_score: 62
   max_candidates: 12
