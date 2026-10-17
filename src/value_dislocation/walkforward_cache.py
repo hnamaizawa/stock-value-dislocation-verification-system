@@ -7,8 +7,10 @@ from typing import Any, Iterable
 
 import pandas as pd
 
+from .strategy.scoring import QUANTITATIVE_SCORE_SCALE
 
-CACHE_SCHEMA_VERSION = "v1"
+
+CACHE_SCHEMA_VERSION = "v2"
 
 
 def walk_forward_cache_key(
@@ -21,6 +23,7 @@ def walk_forward_cache_key(
 ) -> str:
     payload = {
         "schema": CACHE_SCHEMA_VERSION,
+        "score_scale": QUANTITATIVE_SCORE_SCALE,
         "data_signature": str(data_signature),
         "config": config,
         "settings": {
