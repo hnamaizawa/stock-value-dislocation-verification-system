@@ -81,6 +81,7 @@ from value_dislocation.validation import (
     supported_walk_forward_horizons,
     walk_forward_cohort_summary,
     walk_forward_entry_timing_summary,
+    walk_forward_external_attribution_comparison,
     walk_forward_summary,
     walk_forward_validation,
 )
@@ -94,6 +95,8 @@ from value_dislocation.hypothesis_invalidation import (
 from value_dislocation.strategy.criteria import (
     apply_quantitative_criteria,
     copy_with_screen_overrides,
+    external_attribution_screen_comparison,
+    external_attribution_missing_diagnostics,
     prepare_quantitative_universe,
     screening_funnel,
     shortlist_from_table,
@@ -364,6 +367,8 @@ ANALYSIS_ITEM_HELP = {
     "定量スコア": "財務や株価の条件への当てはまりを示す0〜85点の点数です。外的要因の人手レビューや根拠URLの有無では減点せず、財務上の問題は減点します。高得点でも値上がりを保証しません。",
     "スコア": "設定した条件への当てはまりを比べる目安です。高いほど将来の利益が大きいという意味ではありません。",
     "selected_for_review": "定量条件を通過し、人が詳しく確認する候補になったかを示します。",
+    "計算不能割合": "外因説明率を計算できなかった銘柄の割合です。行ごとに、全銘柄と外因説明率以外の条件を通った銘柄を分けています。",
+    "計算不能件数": "外因説明率を計算できなかった銘柄数です。理由別の件数は重複せず、この合計になります。",
     "selection_strategy": "銘柄を探すときに選んだ方法です。「株価が下がった企業を探す」か「値動きが大きい銘柄を探す」かを表します。",
     "抽出ルール": "銘柄を探すときに選んだ方法です。「株価が下がった企業を探す」か「値動きが大きい銘柄を探す」かを表します。",
     "final_evaluation": "財務や業績、最近の株価の動きをまとめた目安です。記号だけで売買を決めないでください。",
@@ -1317,6 +1322,14 @@ def _render_latest_candidate_trends(score_passed: pd.DataFrame, *, star_only: bo
     else:
         st.info("直感判定: ◎☆ 買い候補（主要欠点なし） / ◎ 買い候補 / ○ 条件付き候補 / △ 様子見 / × 見送り。☆は主要な財務・業績・トレンド項目に明確な欠点が見当たらない場合です。")
 
+    refresh_latest = st.button(
+        "Yahoo Finance系の最新トレンドを更新",
+        key="refresh_latest_candidate_trends",
+        help="このボタンを押したときだけ、候補銘柄の最新日足をYahoo Finance系から取得します。抽出条件を適用しただけでは取得しません。",
+    )
+    st.caption("条件の再計算では外部データを取得しません。最新トレンドを更新したい場合だけ上のボタンを押してください。")
+    previous_trend_rows = st.session_state.get("latest_candidate_trend_rows", {})
+
     rows: list[dict] = []
     total = len(score_passed)
     target_label = "値動き条件通過" if active_mode else "スコア通過"
@@ -1349,6 +1362,35 @@ def _render_latest_candidate_trends(score_passed: pd.DataFrame, *, star_only: bo
             evaluation_status = "未評価"
             unassessed_reason = "その他"
             try:
+                if not refresh_latest:
+                    prior = previous_trend_rows.get(code) if isinstance(previous_trend_rows, dict) else None
+                    if isinstance(prior, dict):
+                        latest_price = prior.get("最新株価")
+                        latest_market_date = prior.get("latest_market_date")
+                        latest_volatility = (
+                            float(prior["最新60日ボラ"]) / 100
+                            if pd.notna(prior.get("最新60日ボラ")) else None
+                        )
+                        latest_range = (
+                            float(prior["最新20日値幅"]) / 100
+                            if pd.notna(prior.get("最新20日値幅")) else None
+                        )
+                        previous_state = prior.get("約3カ月前", "未更新")
+                        current_state = prior.get("最新判定", "未更新")
+                        transition_state = prior.get("変化", "未更新")
+                        escaped = prior.get("下降脱出", "未確認")
+                        intuitive_label = prior.get("直感判定", "△ 前回更新結果")
+                        detail = str(prior.get("判断メモ", "前回更新した結果です。"))
+                        evaluation_status = "前回更新"
+                        unassessed_reason = "条件再計算では外部再取得なし"
+                    else:
+                        current_state = "未更新"
+                        transition_state = "未更新"
+                        intuitive_label = "△ 最新判定未更新"
+                        detail = "抽出条件の再計算では最新日足を取得していません。最新トレンド更新ボタンを押すと確認できます。"
+                        evaluation_status = "未評価"
+                        unassessed_reason = "最新トレンド未更新"
+                    raise StopIteration
                 if not bulk_yahoo_allowed:
                     previous_state = "未実施（100件以上）"
                     current_state = "未実施（100件以上）"
@@ -1396,7 +1438,7 @@ def _render_latest_candidate_trends(score_passed: pd.DataFrame, *, star_only: bo
                 pass
             except Exception as exc:
                 detail = f"外部株価履歴を取得できませんでした: {exc}"
-                evaluation_status = "未評価"
+                evaluation_status = "Yahoo取得失敗"
                 unassessed_reason = "Yahoo取得失敗"
 
             try:
@@ -1452,23 +1494,32 @@ def _render_latest_candidate_trends(score_passed: pd.DataFrame, *, star_only: bo
             f"統合一覧は {len(all_result):,} 件です。"
         )
 
-    # Save the unfiltered unified evaluation once per date/code.  This is local history
-    # only; it performs no additional Yahoo or J-Quants request.
-    try:
-        today = pd.Timestamp.now(tz="Asia/Tokyo").date()
-        upsert_daily_evaluations(ROOT, all_result, evaluation_date=today, analysis_as_of=analysis_as_of)
-        write_star_outcomes(ROOT)
-    except Exception as exc:
-        st.warning(f"履歴の保存に失敗しました（画面表示は継続します）: {exc}")
+    if refresh_latest:
+        st.session_state["latest_candidate_trend_rows"] = {
+            str(row.get("raw_code", "")): row
+            for row in all_result.to_dict(orient="records")
+        }
+        # Save only after an explicit external refresh, never during condition edits.
+        try:
+            today = pd.Timestamp.now(tz="Asia/Tokyo").date()
+            upsert_daily_evaluations(ROOT, all_result, evaluation_date=today, analysis_as_of=analysis_as_of)
+            write_star_outcomes(ROOT)
+        except Exception as exc:
+            st.warning(f"履歴の保存に失敗しました（画面表示は継続します）: {exc}")
 
     skipped_count = int(all_result["最新判定"].astype(str).str.startswith("未実施").sum()) if not all_result.empty else 0
-    failed_count = int((all_result["最新判定"] == "取得不能").sum()) if not all_result.empty else 0
-    success_count = len(all_result) - failed_count - skipped_count
+    failed_count = int((all_result["evaluation_status"] == "Yahoo取得失敗").sum()) if not all_result.empty else 0
+    success_count = int((all_result["evaluation_status"] == "当日評価済み").sum()) if not all_result.empty else 0
+    previous_count = int((all_result["evaluation_status"] == "前回更新").sum()) if not all_result.empty else 0
+    not_updated_count = int((all_result["evaluation_status"] == "未評価").sum()) if not all_result.empty else 0
 
     star_mask = all_result["直感判定"].astype(str).str.startswith("◎☆") if not all_result.empty else pd.Series(dtype=bool)
     star_count = int(star_mask.sum()) if not all_result.empty else 0
     if star_only and not active_mode:
-        if not bulk_yahoo_allowed:
+        if not refresh_latest:
+            st.warning("☆だけを最新判定するには、Yahoo Finance系の最新トレンド更新ボタンを押してください。")
+            result = all_result.iloc[0:0].copy()
+        elif not bulk_yahoo_allowed:
             st.warning(
                 "☆だけの銘柄を表示するには最新Yahoo Finance系トレンド判定が必要です。"
                 "対象を99銘柄以下へ絞ってから再度実行してください。"
@@ -1480,16 +1531,17 @@ def _render_latest_candidate_trends(score_passed: pd.DataFrame, *, star_only: bo
     else:
         result = all_result
 
-    count_cols = st.columns(5 if (star_only and not active_mode) else 4)
+    count_cols = st.columns(4)
     count_cols[0].metric(target_label, f"{total:,}", help="定量スコアを通過し、最新トレンド再確認の対象になった銘柄数です。")
     count_cols[1].metric("統合一覧", f"{len(all_result):,}", help="取得成功・失敗・未実施を含め、一覧に残した全対象銘柄数です。")
-    count_cols[2].metric("外部株価取得成功", f"{success_count:,}", help="Yahoo Finance系の最新日足を取得してトレンドを再確認できた銘柄数です。")
-    if skipped_count:
-        count_cols[3].metric("100件以上のため未実施", f"{skipped_count:,}", help="一括外部取得の安全上限を超えたため、最新トレンド再確認を行わなかった銘柄数です。")
-    else:
-        count_cols[3].metric("取得失敗・判定不能", f"{failed_count:,}", help="外部日足を取得できず、最新トレンドを判定できなかった銘柄数です。")
+    count_cols[2].metric("外部株価取得成功", f"{success_count:,}", help="今回、明示ボタンを押した結果Yahoo Finance系の日足を取得できた銘柄数です。")
+    count_cols[3].metric("前回更新結果", f"{previous_count:,}", help="条件再計算時に外部取得せず、前回の更新結果を再表示した銘柄数です。")
+    status_cols = st.columns(4)
+    status_cols[0].metric("取得失敗・判定不能", f"{failed_count:,}", help="今回Yahoo Finance系の日足を取得できず、最新トレンドを判定できなかった銘柄数です。")
+    status_cols[1].metric("今回未更新", f"{not_updated_count:,}", help="外部更新ボタンを押していないため、今回の最新トレンド判定をしていない銘柄数です。")
+    status_cols[2].metric("100件以上のため未実施", f"{skipped_count:,}", help="一括外部取得の安全上限を超えたため、最新トレンド再確認を行わなかった銘柄数です。")
     if star_only and not active_mode:
-        count_cols[4].metric("☆該当", f"{star_count:,}", help="主要な定量条件に加えて短期反転条件も確認できた◎☆銘柄数です。利益保証ではありません。")
+        status_cols[3].metric("☆該当", f"{star_count:,}", help="主要な定量条件に加えて短期反転条件も確認できた◎☆銘柄数です。利益保証ではありません。")
 
     if result.empty and star_only and not active_mode:
         st.info("現在の最新トレンド判定では、☆条件に該当する銘柄はありません。")
@@ -1628,6 +1680,8 @@ def _apply_values(overrides: dict) -> None:
     st.session_state["ui_use_relative"] = bool(s.get("use_relative_underperformance_filter", True))
     st.session_state["ui_benchmark_mode"] = str(s.get("market_benchmark_mode", "auto"))
     st.session_state["ui_relative_pct"] = int(round(-s["minimum_relative_underperformance_6m"] * 100))
+    st.session_state["ui_external_attribution_pct"] = float(s.get("minimum_external_shock_attribution", 0.0)) * 100
+    st.session_state["ui_attribution_missing_policy"] = str(s.get("external_shock_attribution_when_missing", "skip_with_warning"))
     st.session_state["ui_require_forecast"] = bool(s.get("require_forecast", False))
     st.session_state["ui_require_sales_history"] = bool(s.get("require_sales_history", False))
     st.session_state["ui_min_score"] = int(round(s["quantitative_min_score"]))
@@ -1677,6 +1731,8 @@ def _initialize_condition_state() -> None:
     st.session_state.setdefault("ui_max_margin_deterioration_pt", 3.0)
     st.session_state.setdefault("ui_max_forecast_revision_decline_pct", 10.0)
     st.session_state.setdefault("ui_max_sector_underperformance_pct", 15.0)
+    st.session_state.setdefault("ui_external_attribution_pct", 0.0)
+    st.session_state.setdefault("ui_attribution_missing_policy", "skip_with_warning")
 
 
 def _current_overrides() -> dict:
@@ -1702,6 +1758,8 @@ def _current_overrides() -> dict:
             "use_relative_underperformance_filter": bool(st.session_state["ui_use_relative"]),
             "market_benchmark_mode": str(st.session_state.get("ui_benchmark_mode", "auto")),
             "relative_filter_when_topix_missing": "skip_with_warning",
+            "minimum_external_shock_attribution": float(st.session_state.get("ui_external_attribution_pct", 0.0)) / 100,
+            "external_shock_attribution_when_missing": str(st.session_state.get("ui_attribution_missing_policy", "skip_with_warning")),
             "require_forecast": bool(st.session_state["ui_require_forecast"]),
             "require_sales_history": bool(st.session_state["ui_require_sales_history"]),
             "quantitative_min_score": int(st.session_state["ui_min_score"]),
@@ -1886,6 +1944,30 @@ def render_condition_builder() -> None:
                 step=1,
                 disabled=active_mode or (not use_relative) or benchmark_mode == "disabled",
             )
+        attribution1, attribution2 = st.columns(2)
+        with attribution1:
+            attribution_pct = st.slider(
+                "外因説明率の下限（%）", 0, 100,
+                value=int(round(float(st.session_state.get("ui_external_attribution_pct", 0.0)))),
+                step=5,
+                disabled=active_mode,
+                help="株価の下落のうち、市場全体や同じ業種の値下がりで説明できる割合の下限です。0%ならこの条件は使いません。計算できない銘柄は右の設定に従います。数字は原因を証明するものではありません。",
+            )
+        with attribution2:
+            missing_policy_options = {
+                "通して警告を表示": "skip_with_warning",
+                "候補から外す": "fail",
+            }
+            current_missing_policy = str(st.session_state.get("ui_attribution_missing_policy", "skip_with_warning"))
+            policy_labels = list(missing_policy_options)
+            policy_values = list(missing_policy_options.values())
+            policy_index = policy_values.index(current_missing_policy) if current_missing_policy in policy_values else 0
+            missing_policy_label = st.selectbox(
+                "外因説明率を計算できない場合", policy_labels, index=policy_index,
+                disabled=active_mode,
+                help="6か月騰落が0%以上、または市場・業種の比較データが足りない場合に使います。「通して警告」は候補に残して確認事項を表示し、「候補から外す」は候補にしません。",
+            )
+            attribution_missing_policy = missing_policy_options[missing_policy_label]
 
         st.markdown("### 5. 値動き活発型の条件")
         dt1, dt2, dt3 = st.columns(3)
@@ -1940,6 +2022,8 @@ def render_condition_builder() -> None:
             "ui_max_sector_underperformance_pct": max_sector_underperformance_pct,
             "ui_require_forecast": require_forecast, "ui_drawdown_pct": drawdown,
             "ui_use_relative": use_relative, "ui_relative_pct": relative_pct, "ui_benchmark_mode": benchmark_mode,
+            "ui_external_attribution_pct": attribution_pct,
+            "ui_attribution_missing_policy": attribution_missing_policy,
             "ui_min_score": min_score, "ui_max_queue": max_queue,
             "ui_require_dividend": require_dividend,
             "ui_min_dividend_yield_pct": min_dividend_yield_pct,
@@ -2001,11 +2085,34 @@ def render_condition_builder() -> None:
         metrics[2].metric("日中値幅通過", f"{funnel[3]['count']:,}", help="設定した20日平均日中値幅以上だった銘柄数です。")
         metrics[3].metric("活発度通過", f"{funnel[-1]['count']:,}", help="値動き活発度スコアの条件を通過した銘柄数です。")
     else:
-        metrics[1].metric("財務条件通過", f"{funnel[2]['count']:,}", help="自己資本・利益・売上などの必須財務条件を通過した銘柄数です。")
-        metrics[2].metric("価格下落条件通過", f"{funnel[3]['count']:,}", help="52週高値からの下落や市場比較など、価格条件を通過した銘柄数です。")
-        metrics[3].metric("スコア通過", f"{funnel[-1]['count']:,}", help="必須条件と最低定量スコアを通過した銘柄数です。")
+        funnel_counts = {str(item["stage"]): int(item["count"]) for item in funnel}
+        metrics[1].metric("財務条件通過", f"{funnel_counts.get('財務の必須条件', 0):,}", help="自己資本・利益・売上などの必須財務条件を通過した銘柄数です。")
+        metrics[2].metric("価格下落条件通過", f"{funnel_counts.get('価格下落条件', 0):,}", help="52週高値からの下落や市場比較など、価格条件を通過した銘柄数です。")
+        metrics[3].metric("スコア通過", f"{funnel_counts.get('定量スコア', 0):,}", help="必須条件と最低定量スコアを通過した銘柄数です。")
     metrics[4].metric("統合候補", f"{len(score_passed):,}", help="最新トレンド再確認へ進む候補銘柄数です。")
     _analysis_dataframe(pd.DataFrame(funnel), width="stretch", hide_index=True)
+    if applied_strategy != "active_trading":
+        funnel_counts = {str(item["stage"]): int(item["count"]) for item in funnel}
+        fc1, fc2, fc3 = st.columns(3)
+        fc1.metric("下限未達で外れた件数", f"{funnel_counts.get('外因説明率の下限未達で外れた件数', 0):,}")
+        fc2.metric("計算不能で外れた件数", f"{funnel_counts.get('計算不能で外れた件数', 0):,}")
+        fc3.metric("計算できずに通した件数", f"{funnel_counts.get('計算できずに通した件数', 0):,}")
+        st.markdown("#### 外因説明率を計算できない銘柄の内訳")
+        missing_diagnostics = external_attribution_missing_diagnostics(audit)
+        _analysis_dataframe(missing_diagnostics, width="stretch", hide_index=True)
+        st.caption("割合は各行の対象銘柄数に対する計算不能件数です。「外因以外の条件を通過」は、外因説明率以外の必須条件と定量スコアを通った銘柄を指します。")
+        st.caption("外因説明率は市場・業種の値下がりとの重なりを示す目安で、原因を証明するものではありません。")
+
+        if st.button("外因説明率・TOPIX条件の候補数を比較", key="compare_attribution_screen"):
+            dynamic_config = copy_with_screen_overrides(base_config, overrides)
+            st.session_state["attribution_screen_comparison"] = external_attribution_screen_comparison(
+                bundle["prepared"], dynamic_config
+            )
+        candidate_comparison = st.session_state.get("attribution_screen_comparison")
+        if isinstance(candidate_comparison, pd.DataFrame):
+            st.markdown("#### 同じデータ・同じ基準日の候補数比較")
+            _analysis_dataframe(candidate_comparison, width="stretch", hide_index=True)
+            st.caption("他の条件と評価データを固定し、外因説明率0/30/50/70%とTOPIX比-8%条件の有無だけを変えた比較です。画面操作によるデータ取得はありません。")
 
     export_document = profile_document("current_conditions", st.session_state["condition_preset"], overrides)
     export_json = json.dumps(export_document, ensure_ascii=False, indent=2)
@@ -2725,6 +2832,71 @@ def _render_history_walk_forward() -> None:
                 )
             else:
                 st.success(f"Walk-Forward検証を完了しました。候補イベント {len(events):,} 件です。")
+
+    result_horizons = tuple(
+        int(value) for value in st.session_state.get(
+            "walk_forward_validation_horizons", tuple(horizons)
+        )
+    )
+    if st.button(
+        "外因説明率・TOPIX条件をWalk-Forwardで比較",
+        key="run_walk_forward_attribution_comparison",
+        help="外因説明率4段階とTOPIX比-8%条件の有無を、同じローカルデータ・同じ過去時点で比較します。8通りを再評価するため時間がかかりますが、外部データは取得しません。",
+    ):
+        local_data = load_curated_latest(ROOT)
+        comparison_config = load_config(REAL_CONFIG)
+        if int(st.session_state.get("screening_revision", 0)) > 0:
+            comparison_config = copy_with_screen_overrides(comparison_config, _current_overrides())
+        comparison_settings = WalkForwardConfig(
+            max_snapshots=int(snapshots),
+            spacing_trading_days=int(spacing),
+            controls_per_event=int(controls),
+        )
+        comparison_horizons = supported_walk_forward_horizons(
+            local_data["prices"], result_horizons,
+            minimum_history_trading_days=comparison_settings.minimum_history_trading_days,
+            entry_delay_trading_days=comparison_settings.entry_delay_trading_days,
+        )
+        if not comparison_horizons:
+            st.warning("保存済み日足では、選択したWalk-Forward期間を比較できません。より短い評価期間を選ぶか、日足が蓄積されてから再実行してください。")
+            return
+        comparison_progress = st.progress(0.0)
+        comparison_status = st.empty()
+
+        def update_comparison_progress(info: dict) -> None:
+            variant = int(info.get("variant", 0))
+            total = max(int(info.get("total_variants", 8)), 1)
+            current = int(info.get("snapshot", 0))
+            total_snapshots = max(int(info.get("total_snapshots", 1)), 1)
+            comparison_progress.progress(min(((variant - 1) + current / total_snapshots) / total, 1.0))
+            comparison_status.caption(
+                f"条件 {variant}/{total}・過去時点 {current}/{total_snapshots} "
+                f"{info.get('message', '処理中')}"
+            )
+
+        with st.spinner("同じローカルデータで8通りを評価しています…"):
+            comparison_result = walk_forward_external_attribution_comparison(
+                local_data["companies"], local_data["prices"], local_data["financials"],
+                comparison_config,
+                settings=comparison_settings,
+                horizons=comparison_horizons,
+                cache_dir=WALK_FORWARD_CACHE,
+                data_signature=f"{_walk_forward_data_signature()}:{__version__}",
+                historical_masters=load_security_master_history(ROOT),
+                progress=update_comparison_progress,
+            )
+        st.session_state["walk_forward_attribution_comparison"] = comparison_result
+        comparison_progress.progress(1.0)
+        comparison_status.caption("8通りの比較が完了しました。")
+    wf_attribution_comparison = st.session_state.get("walk_forward_attribution_comparison")
+    if isinstance(wf_attribution_comparison, pd.DataFrame) and not wf_attribution_comparison.empty:
+        shown = wf_attribution_comparison.copy()
+        for column in ["候補平均", "候補プラス率", "類似非選択平均", "選択効果", "選択効果プラス率"]:
+            if column in shown:
+                shown[column] = pd.to_numeric(shown[column], errors="coerce") * 100
+        st.markdown("#### 外因説明率・TOPIX条件別のWalk-Forward成績")
+        _analysis_dataframe(shown, width="stretch", hide_index=True)
+        st.caption("選択効果は候補平均から類似非選択平均を引いた値です。プラス率と確定件数を合わせて確認してください。条件以外は固定しており、将来成績は選定後の採点にのみ使います。")
 
     events = st.session_state.get("walk_forward_validation_events")
     if not isinstance(events, pd.DataFrame) or events.empty:

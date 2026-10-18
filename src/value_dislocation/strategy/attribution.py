@@ -41,4 +41,17 @@ def add_external_shock_attribution(frame: pd.DataFrame) -> pd.DataFrame:
     out["external_shock_attribution"] = ratio.where(valid)
     out["external_shock_attribution_score"] = (out["external_shock_attribution"] * 100.0).where(valid)
     out["external_shock_attribution_available"] = valid
+
+    # Keep unavailable reasons mutually exclusive so their counts add up to the
+    # total unavailable count. A non-negative stock return does not represent a
+    # decline to explain; otherwise industry data is checked before market data.
+    unavailable_reason = pd.Series("", index=index, dtype="object")
+    non_negative_return = stock.notna() & stock.ge(0)
+    missing_stock_return = stock.isna()
+    missing_industry_return = stock.lt(0) & sector.isna()
+    missing_comparison_return = stock.lt(0) & sector.notna() & benchmark.isna()
+    unavailable_reason.loc[non_negative_return] = "6か月騰落が0以上"
+    unavailable_reason.loc[missing_stock_return | missing_comparison_return] = "比較データ不足"
+    unavailable_reason.loc[missing_industry_return] = "業種データ不足"
+    out["external_shock_attribution_unavailable_reason"] = unavailable_reason.where(~valid, "")
     return out

@@ -27,6 +27,8 @@ METRIC_HELP = {
     "maximum_forecast_op_decline": "会社が予想する営業利益が、直近の実績よりどれだけ減ってよいかを設定します。",
     "minimum_drawdown_52w": "今の株価が過去52週間の最高値から、少なくともどれだけ下がった銘柄を探すかです。",
     "minimum_relative_underperformance_6m": "過去6か月で、銘柄の株価が市場全体よりどれだけ弱かったかを見ます。市場の目安は正式TOPIXを優先し、使えない場合はTOPIX連動ETFで代用します。",
+    "minimum_external_shock_attribution": "株価の下落のうち、市場全体や同じ業種の値下がりで説明できる割合の下限です。0%ならこの条件は使いません。割合は原因の証明ではありません。",
+    "external_shock_attribution_when_missing": "市場や業種の比較データが足りず外因説明率を計算できない銘柄の扱いです。",
     "quantitative_min_score": "財務や株価への当てはまりを示す0〜85点の点数です。人手レビューや根拠URLの有無では減点せず、財務上の問題は減点します。外的要因の原因を証明する点数ではありません。",
     "minimum_forecast_dividend_yield": "会社予想の年間配当を今の株価で割った割合です。高い場合は、配当が減る可能性も確認してください。",
     "maximum_payout_ratio": "利益のうち、配当に回す割合です。割合が高すぎると、配当を続けにくくなることがあります。",

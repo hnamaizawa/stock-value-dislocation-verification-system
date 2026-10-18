@@ -44,6 +44,8 @@ J-Quants実データ更新時のCompanyMasterを、`data/history/security_master
 
 価格特徴量はJ-Quantsの調整済みOHLCVを優先する。
 
+外因説明率は保存元データへ追加取得せず、基準日までの株価特徴量から算出する。画面上の監査列 `external_shock_attribution_unavailable_reason` は、計算不能時に「6か月騰落が0以上」「比較データ不足」「業種データ不足」のいずれかを記録する。
+
 ## FinancialSnapshot
 
 `disclosure_date,disclosure_time,code,document_id,statement_type,period_end,fiscal_year,sales,operating_profit,ordinary_profit,net_income,operating_cf,investing_cf,financing_cf,total_assets,equity,interest_bearing_debt,cash,eps,book_value_per_share,forecast_sales,forecast_operating_profit,forecast_eps,shares_outstanding,is_full_year_actual,is_revision,source_type`

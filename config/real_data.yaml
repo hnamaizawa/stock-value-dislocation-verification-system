@@ -85,6 +85,8 @@ screen:
   maximum_forecast_op_decline: -0.20
   minimum_drawdown_52w: -0.18
   minimum_relative_underperformance_6m: -0.08
+  minimum_external_shock_attribution: 0.0
+  external_shock_attribution_when_missing: skip_with_warning
   use_relative_underperformance_filter: true
   market_benchmark_mode: auto
   relative_filter_when_topix_missing: skip_with_warning

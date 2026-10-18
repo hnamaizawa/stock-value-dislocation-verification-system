@@ -33,6 +33,7 @@ REQUIRED_CHECK_COLUMNS = [
     "pass_operating_margin",
     "pass_drawdown",
     "pass_relative_underperformance",
+    "pass_external_shock_attribution",
     "pass_forecast",
 ]
 
@@ -186,6 +187,49 @@ def apply_quantitative_criteria(
     scored.loc[proxy_mask, "benchmark_return_6m"] = proxy_returns.loc[proxy_mask]
     scored = add_external_shock_attribution(scored)
 
+    attribution_minimum = float(s.get("minimum_external_shock_attribution", 0.0))
+    attribution_minimum = min(max(attribution_minimum, 0.0), 1.0)
+    attribution_policy = str(s.get("external_shock_attribution_when_missing", "skip_with_warning"))
+    if attribution_policy not in {"skip_with_warning", "fail"}:
+        attribution_policy = "skip_with_warning"
+    attribution_available = _numeric_series(scored, "external_shock_attribution", index).notna()
+    # A zero threshold disables this new screen entirely, preserving the pre-B cohort.
+    if attribution_minimum <= 0.0:
+        attribution_pass = _bool_series(True, index)
+    else:
+        attribution_pass = attribution_available & (
+            _numeric_series(scored, "external_shock_attribution", index) >= attribution_minimum
+        )
+        missing_pass = attribution_policy == "skip_with_warning"
+        if missing_pass:
+            attribution_pass |= ~attribution_available
+    if selection_strategy == "active_trading":
+        attribution_pass = _bool_series(True, index)
+    scored["external_shock_attribution_minimum"] = attribution_minimum
+    scored["external_shock_attribution_missing_policy"] = attribution_policy
+    scored["external_shock_attribution_missing"] = ~attribution_available
+    scored["external_shock_attribution_skipped"] = (
+        ~attribution_available
+        & attribution_pass
+        & (attribution_minimum > 0.0)
+        & (attribution_policy == "skip_with_warning")
+        & (selection_strategy == "value_dislocation")
+    )
+    attribution_values = _numeric_series(scored, "external_shock_attribution", index)
+    scored["external_shock_attribution_below_minimum"] = (
+        (attribution_minimum > 0.0)
+        & attribution_available
+        & attribution_values.lt(attribution_minimum)
+        & (selection_strategy == "value_dislocation")
+    )
+    scored["external_shock_attribution_missing_failed"] = (
+        (attribution_minimum > 0.0)
+        & ~attribution_available
+        & (attribution_policy == "fail")
+        & (selection_strategy == "value_dislocation")
+    )
+    scored["pass_external_shock_attribution"] = attribution_pass.astype(bool)
+
     relative_filter_enabled = bool(s.get("use_relative_underperformance_filter", True)) and benchmark_mode != "disabled"
     scored["relative_filter_enabled"] = relative_filter_enabled
     scored["relative_filter_applied"] = (
@@ -335,6 +379,7 @@ def apply_quantitative_criteria(
         ("pass_operating_margin", "営業利益率"),
         ("pass_drawdown", "52週高値からの下落"),
         ("pass_relative_underperformance", "市場比較相対下落"),
+        ("pass_external_shock_attribution", "外因説明率"),
         ("pass_forecast", "会社予想"),
         ("pass_structural_deterioration_guard", "構造悪化ガード"),
         ("pass_dividend_conditions", "配当条件"),
@@ -383,6 +428,8 @@ def apply_quantitative_criteria(
         attribution = pd.to_numeric(pd.Series([row.get("external_shock_attribution_score")]), errors="coerce").iloc[0]
         if pd.notna(attribution):
             warnings.append(f"外因説明率 {float(attribution):.0f}%（市場・業種価格要因の説明率。因果証明ではない）")
+        elif selection_strategy == "value_dislocation" and attribution_minimum > 0.0 and attribution_policy == "skip_with_warning":
+            warnings.append("外因説明率を計算できないため、この条件は通して確認事項に残しました")
         elif selection_strategy == "value_dislocation":
             warnings.append("外因説明率は市場・業種比較データ不足")
         if selection_strategy == "value_dislocation":
@@ -430,6 +477,55 @@ def shortlist_from_table(table: pd.DataFrame, config: dict[str, Any]) -> pd.Data
     return result.head(maximum).reset_index(drop=True)
 
 
+def external_attribution_missing_diagnostics(table: pd.DataFrame) -> pd.DataFrame:
+    """Summarize unavailable-attribution counts for the full and pre-gate cohorts."""
+    reason_labels = ("6か月騰落が0以上", "比較データ不足", "業種データ不足")
+    if table.empty:
+        return pd.DataFrame([{
+            "対象": cohort,
+            "対象銘柄数": 0,
+            "計算不能件数": 0,
+            "計算不能割合": "—",
+            **{f"{reason}件数": 0 for reason in reason_labels},
+        } for cohort in ("全銘柄", "外因以外の条件を通過")])
+
+    reasons = table.get(
+        "external_shock_attribution_unavailable_reason",
+        pd.Series("", index=table.index, dtype="object"),
+    ).fillna("").astype(str)
+    pass_columns = [
+        column for column in table.columns
+        if column.startswith("pass_") and column != "pass_external_shock_attribution"
+    ]
+    if pass_columns:
+        other_conditions_pass = table[pass_columns].fillna(False).astype(bool).all(axis=1)
+    else:
+        other_conditions_pass = table.get(
+            "selected_for_review", pd.Series(False, index=table.index)
+        ).fillna(False).astype(bool)
+
+    cohorts = (
+        ("全銘柄", pd.Series(True, index=table.index)),
+        ("外因以外の条件を通過", other_conditions_pass),
+    )
+    rows: list[dict[str, int | float | str]] = []
+    for label, mask in cohorts:
+        scoped_reasons = reasons.loc[mask]
+        total = int(mask.sum())
+        missing = int(scoped_reasons.ne("").sum())
+        rows.append({
+            "対象": label,
+            "対象銘柄数": total,
+            "計算不能件数": missing,
+            "計算不能割合": f"{missing / total:.1%}" if total else "—",
+            **{
+                f"{reason}件数": int(scoped_reasons.eq(reason).sum())
+                for reason in reason_labels
+            },
+        })
+    return pd.DataFrame(rows)
+
+
 def screening_funnel(table: pd.DataFrame) -> list[dict[str, int | str]]:
     if table.empty:
         return [{"stage": "財務・株価データが揃う銘柄", "count": 0}]
@@ -454,7 +550,8 @@ def screening_funnel(table: pd.DataFrame) -> list[dict[str, int | str]]:
                     "pass_operating_margin",
                 ],
             ),
-            ("価格下落条件", REQUIRED_CHECK_COLUMNS[:-1]),
+            ("価格下落条件", REQUIRED_CHECK_COLUMNS[:-2]),
+            ("外因説明率条件", REQUIRED_CHECK_COLUMNS[:-1]),
             ("会社予想条件", REQUIRED_CHECK_COLUMNS),
             ("構造悪化ガード", REQUIRED_CHECK_COLUMNS + ["pass_structural_deterioration_guard"]),
             ("配当条件", REQUIRED_CHECK_COLUMNS + ["pass_structural_deterioration_guard", "pass_dividend_conditions"]),
@@ -464,6 +561,16 @@ def screening_funnel(table: pd.DataFrame) -> list[dict[str, int | str]]:
     for label, columns in stages:
         count = len(table) if not columns else int(table[columns].all(axis=1).sum())
         result.append({"stage": label, "count": count})
+    if strategy != "active_trading":
+        pass_attribution = table.get("pass_external_shock_attribution", pd.Series(True, index=table.index)).fillna(False).astype(bool)
+        skipped = table.get("external_shock_attribution_skipped", pd.Series(False, index=table.index)).fillna(False).astype(bool)
+        below_minimum = table.get("external_shock_attribution_below_minimum", pd.Series(False, index=table.index)).fillna(False).astype(bool)
+        missing_failed = table.get("external_shock_attribution_missing_failed", (~pass_attribution & ~below_minimum)).fillna(False).astype(bool)
+        result.extend([
+            {"stage": "外因説明率の下限未達で外れた件数", "count": int(below_minimum.sum()), "diagnostic": True},
+            {"stage": "計算不能で外れた件数", "count": int(missing_failed.sum()), "diagnostic": True},
+            {"stage": "計算できずに通した件数", "count": int(skipped.sum()), "diagnostic": True},
+        ])
     return result
 
 
@@ -473,3 +580,32 @@ def copy_with_screen_overrides(config: dict[str, Any], overrides: dict[str, Any]
         for key, value in overrides.get(section, {}).items():
             out.setdefault(section, {})[key] = value
     return out
+
+
+def external_attribution_screen_comparison(
+    prepared: pd.DataFrame, config: dict[str, Any]
+) -> pd.DataFrame:
+    """Compare 4 attribution cutoffs x TOPIX-relative filter on the same prepared rows."""
+    rows: list[dict[str, Any]] = []
+    as_of_values = pd.to_datetime(prepared.get("as_of", pd.Series(dtype="datetime64[ns]")), errors="coerce").dropna()
+    as_of_label = as_of_values.max().date().isoformat() if not as_of_values.empty else "同一の集約済みスナップショット"
+    for minimum in (0.0, 0.3, 0.5, 0.7):
+        for relative_enabled in (True, False):
+            variant = copy_with_screen_overrides(config, {
+                "screen": {
+                    "minimum_external_shock_attribution": minimum,
+                    "use_relative_underperformance_filter": relative_enabled,
+                    "minimum_relative_underperformance_6m": -0.08,
+                }
+            })
+            evaluated = apply_quantitative_criteria(prepared, variant)
+            rows.append({
+                "基準日": as_of_label,
+                "外因説明率下限": f"{minimum:.0%}" if minimum else "なし",
+                "TOPIX比 -8%以下": "あり" if relative_enabled else "なし",
+                "定量候補数": (
+                    int(evaluated["selected_for_review"].fillna(False).astype(bool).sum())
+                    if "selected_for_review" in evaluated.columns else 0
+                ),
+            })
+    return pd.DataFrame(rows)

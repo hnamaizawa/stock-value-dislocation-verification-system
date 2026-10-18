@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections import Counter
 from collections.abc import Callable, Iterable
+from copy import deepcopy
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -510,6 +511,74 @@ def walk_forward_summary(events: pd.DataFrame, horizons: Iterable[int] = STAR_OU
             }
         )
     return pd.DataFrame(rows)
+
+
+def walk_forward_external_attribution_comparison(
+    companies: pd.DataFrame,
+    prices: pd.DataFrame,
+    financials: pd.DataFrame,
+    config: dict,
+    *,
+    settings: WalkForwardConfig,
+    horizons: Iterable[int],
+    cache_dir: Path | None = None,
+    data_signature: str = "",
+    historical_masters: list[SecurityMasterSnapshot] | None = None,
+    progress: Callable[[dict], None] | None = None,
+) -> pd.DataFrame:
+    """Compare attribution cutoffs and the fixed -8% TOPIX-relative gate.
+
+    All variants replay the same local source frames and point-in-time date schedule.
+    ``walk_forward_validation`` limits prices and disclosures to each replay date
+    before features (including external-shock attribution) are calculated.
+    """
+    comparison_rows: list[dict] = []
+    horizons = tuple(int(value) for value in horizons)
+    variants = [(minimum, enabled) for minimum in (0.0, 0.3, 0.5, 0.7) for enabled in (True, False)]
+    replay_dates = _walk_forward_dates(
+        prices,
+        max_snapshots=settings.max_snapshots,
+        spacing_trading_days=settings.spacing_trading_days,
+        minimum_history_trading_days=settings.minimum_history_trading_days,
+        required_future_sessions=max((int(value) for value in horizons), default=10)
+        + max(settings.entry_delay_trading_days, default=0),
+    )
+    replay_period = (
+        f"{pd.Timestamp(replay_dates[0]).date()}～{pd.Timestamp(replay_dates[-1]).date()}"
+        if replay_dates else "検証可能な過去時点なし"
+    )
+    for variant_number, (minimum, relative_enabled) in enumerate(variants, start=1):
+        variant_config = deepcopy(config)
+        variant_config.setdefault("screen", {}).update({
+            "minimum_external_shock_attribution": minimum,
+            "external_shock_attribution_when_missing": "skip_with_warning",
+            "use_relative_underperformance_filter": relative_enabled,
+            "minimum_relative_underperformance_6m": -0.08,
+        })
+
+        def report_variant(info: dict) -> None:
+            if progress is not None:
+                progress({**info, "variant": variant_number, "total_variants": len(variants)})
+
+        events = walk_forward_validation(
+            companies, prices, financials, variant_config,
+            settings=settings,
+            horizons=horizons,
+            cache_dir=cache_dir,
+            data_signature=data_signature,
+            historical_masters=historical_masters,
+            progress=report_variant,
+        )
+        summary = walk_forward_summary(events, horizons=horizons)
+        for _, result in summary.iterrows():
+            comparison_rows.append({
+                "再現期間": replay_period,
+                "外因説明率下限": f"{minimum:.0%}" if minimum else "なし",
+                "TOPIX比 -8%以下": "あり" if relative_enabled else "なし",
+                "候補イベント数": int(len(events)),
+                **result.to_dict(),
+            })
+    return pd.DataFrame(comparison_rows)
 
 
 def walk_forward_cohort_summary(events: pd.DataFrame, *, horizon_days: int = 30) -> pd.DataFrame:
