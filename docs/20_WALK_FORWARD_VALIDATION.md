@@ -16,6 +16,46 @@ For every replay date:
 5. The newest historical security-master snapshot on or before the replay date defines the company universe.
 6. No J-Quants or Yahoo fetch is triggered by Walk-Forward execution; it uses certified local data only.
 
+## Feature-history consistency and replay exclusions (v0.6.81)
+
+The production 52-week drawdown uses 252 daily observations; the six-month return uses
+126. A replay date is eligible only when 252 trading sessions are present through that
+date. Each security also needs 252 of its own dated price rows; newer listings or partial
+histories are excluded from that date's candidate universe. The screen reports replay
+dates omitted for short history or insufficient forward outcomes, plus excluded
+security-date pairs. It never substitutes a shorter window and labels it as a full year.
+
+The checked-in real-data configuration requests 400 **calendar** days. This workspace has
+no curated real-data bundle, so its accumulated period cannot be measured here. A 400-day
+request is generally too short for a full 252-session lookback plus a 180-session outcome.
+For the default eight-date mode, a rough complete-history target is about 840 calendar
+days (252 history + 180 outcome + 5 waiting sessions + seven 20-session gaps). Actual
+availability depends on holidays, provider limits, and each security's listing date.
+The configured lookback is not changed automatically; any extension applies only on the
+next explicit data update and preserves the requested/effective period in its manifest.
+
+## Episode-level counts and uncertainty (v0.6.81)
+
+If one security is selected at adjacent replay dates, those rows share one episode whose
+start is the first selected date. A gap with an intervening replay date where it was not
+selected starts a new episode. Summary returns and bootstrap resampling use the first
+selection in each episode; tables show both confirmed episodes and repeated event rows.
+
+The mean selection effect is accompanied by a 95% episode-bootstrap interval. When this
+interval includes zero, the UI says there is not enough evidence to claim a selection
+effect. The reported resampling share at or below zero is descriptive and is not a
+probability that the strategy works or fails.
+
+## Rule-learning holdout (v0.6.81)
+
+Rule learning excludes the latest configurable `final_holdout_trading_days` from training.
+An event is eligible for training only when its primary-horizon outcome date is before
+that holdout begins, so a label that uses holdout prices cannot leak into rule adjustment.
+The default is 60 trading sessions, the minimum is 100 mature episodes, and
+`auto_apply` defaults to false. Candidate rule changes remain proposals; they are not
+applied automatically. The current data status shows matured episodes versus the required
+count and the holdout length.
+
 ## Matched non-selected controls
 
 Each selected event is compared with up to five securities that were **not selected on that replay date**.

@@ -15,6 +15,7 @@ from value_dislocation.validation import (
     walk_forward_cohort_summary,
     walk_forward_entry_timing_summary,
     walk_forward_external_attribution_comparison,
+    walk_forward_history_diagnostics,
     walk_forward_summary,
     walk_forward_validation,
 )
@@ -203,6 +204,87 @@ def test_walk_forward_summary_reports_selection_edge():
     assert np.isclose(row["選択効果プラス率"], 1.0)
 
 
+def test_walk_forward_bootstrap_interval_tightens_with_more_episodes():
+    values = [0.04, -0.01, 0.03, 0.00]
+
+    def summarize(repeats):
+        rows = []
+        for i, value in enumerate(values * repeats):
+            rows.append({
+                "episode_id": f"episode-{i}",
+                "selection_date": pd.Timestamp("2024-01-01") + pd.Timedelta(days=i),
+                "code": f"{i:04d}",
+                "return_30d": value + 0.01,
+                "control_return_30d": 0.01,
+                "selection_edge_30d": value,
+            })
+        return walk_forward_summary(pd.DataFrame(rows), horizons=(30,)).iloc[0]
+
+    small = summarize(2)
+    large = summarize(30)
+    small_width = small["選択効果95%区間上限"] - small["選択効果95%区間下限"]
+    large_width = large["選択効果95%区間上限"] - large["選択効果95%区間下限"]
+    assert large_width < small_width
+
+
+def test_walk_forward_history_diagnostics_reports_short_replay_and_security_history():
+    dates = pd.bdate_range("2024-01-02", periods=300)
+    prices = pd.concat([
+        pd.DataFrame({"date": dates, "code": "A"}),
+        pd.DataFrame({"date": dates[-100:], "code": "B"}),
+    ], ignore_index=True)
+    settings = WalkForwardConfig(
+        max_snapshots=3, spacing_trading_days=20,
+        minimum_history_trading_days=252, entry_delay_trading_days=(0,),
+    )
+
+    result = walk_forward_history_diagnostics(prices, settings=settings, horizons=(10,))
+
+    assert result["excluded_for_insufficient_history"] == 1
+    assert result["usable_replay_dates"] == 2
+    assert result["excluded_security_date_pairs"] == 2
+
+
+def test_consecutive_replay_selections_are_one_episode(monkeypatch):
+    dates = pd.bdate_range("2024-01-02", periods=300)
+    prices = pd.DataFrame({
+        "code": "A", "date": dates, "close": np.linspace(100, 130, len(dates)),
+        "high": np.linspace(101, 131, len(dates)), "low": np.linspace(99, 129, len(dates)),
+        "volume": 1000,
+    })
+    companies = pd.DataFrame([{"code": "A", "name": "A社", "sector": "Tech", "market": "Prime"}])
+    financials = pd.DataFrame([{"code": "A", "disclosure_date": dates[0]}])
+
+    def fake_prepare(c, p, f, as_of):
+        return pd.DataFrame([{
+            "code": "A", "name": "A社", "sector": "Tech", "market": "Prime", "close": p.iloc[-1]["close"],
+        }])
+
+    def fake_apply(prepared, config):
+        out = prepared.copy()
+        out["selected_for_review"] = True
+        return out
+
+    monkeypatch.setattr(validation, "prepare_quantitative_universe", fake_prepare)
+    monkeypatch.setattr(validation, "apply_quantitative_criteria", fake_apply)
+    monkeypatch.setattr(validation, "build_buy_readiness", lambda metrics, **kwargs: {"evidence_score": 90, "checks": [], "decision_level": "consider"})
+    monkeypatch.setattr(validation, "build_intuitive_signal", lambda readiness, transition: {"symbol": "◎", "legacy_star": False, "reversal_star": False, "star_rule_version": "test"})
+
+    events = walk_forward_validation(
+        companies, prices, financials, {},
+        settings=WalkForwardConfig(max_snapshots=2, spacing_trading_days=5, minimum_history_trading_days=252, entry_delay_trading_days=(0,)),
+        horizons=(2,),
+    )
+
+    assert len(events) == 2
+    assert events["episode_id"].nunique() == 1
+    assert events["episode_start_date"].nunique() == 1
+    assert events["episode_occurrence"].tolist() == [1, 2]
+    summary = walk_forward_summary(events, horizons=(2,)).iloc[0]
+    assert summary["確定エピソード数"] == 1
+    assert summary["延べ確定件数"] == 2
+
+
 def test_walk_forward_compares_nested_star_cohorts_with_robust_metrics():
     events = pd.DataFrame([
         {"return_30d": 0.10, "legacy_star_eligible": True, "reversal_star_eligible": True},
@@ -244,14 +326,14 @@ def test_walk_forward_caps_horizons_to_available_price_history():
         prices, (10, 20, 30, 60, 90, 180), minimum_history_trading_days=60,
         entry_delay_trading_days=(3, 5),
     )
-    assert supported == (10, 20, 30, 60)
+    assert supported == (10, 20, 30, 60, 90)
 
 
 def test_walk_forward_horizon_support_boundary_and_empty_history():
     minimum = pd.DataFrame({"date": pd.bdate_range("2025-01-06", periods=76)})
-    insufficient = pd.DataFrame({"date": pd.bdate_range("2025-01-06", periods=75)})
-    assert supported_walk_forward_horizons(minimum, (10, 20)) == (10,)
-    assert supported_walk_forward_horizons(insufficient, (10, 20)) == ()
+    insufficient = pd.DataFrame({"date": pd.bdate_range("2025-01-06", periods=74)})
+    assert supported_walk_forward_horizons(minimum, (10, 20), minimum_history_trading_days=60) == (10,)
+    assert supported_walk_forward_horizons(insufficient, (10, 20), minimum_history_trading_days=60) == ()
     assert supported_walk_forward_horizons(pd.DataFrame(), (10,)) == ()
 
 
