@@ -10,6 +10,7 @@ from value_dislocation.strategy.criteria import (
     build_quantitative_table,
     external_attribution_missing_diagnostics,
     external_attribution_screen_comparison,
+    dislocation_score_mode_comparison,
     screening_funnel,
 )
 from value_dislocation.strategy.attribution import add_external_shock_attribution
@@ -297,6 +298,14 @@ def test_screen_comparison_reuses_prepared_rows_without_fetching(monkeypatch):
     for _, method_rows in no_attribution.groupby("計算方式"):
         by_relative_filter = method_rows.set_index("TOPIX比 -8%以下")
         assert by_relative_filter.loc["なし", "定量候補数"] > by_relative_filter.loc["あり", "定量候補数"]
+
+
+def test_dislocation_score_comparison_uses_same_prepared_snapshot():
+    comparison = dislocation_score_mode_comparison(_prepared_attribution_rows(), _config())
+    assert len(comparison) == 2
+    assert set(comparison["点数方式"]) == {"従来方式（下落幅そのもの）", "外因説明分を重視"}
+    assert comparison["基準日"].nunique() == 1
+    assert comparison["定量候補数"].notna().all()
 
 
 def test_etf_proxy_is_used_when_official_topix_is_missing():

@@ -116,6 +116,24 @@ def test_walk_forward_comparison_runs_sixteen_screen_variants(monkeypatch):
     assert result["選択効果"].dropna().eq(0.08).all()
 
 
+def test_dislocation_score_walk_forward_comparison_runs_both_modes(monkeypatch):
+    modes = []
+
+    def fake_walk_forward(companies, prices, financials, config, **kwargs):
+        modes.append(config["screen"]["dislocation_score_mode"])
+        return pd.DataFrame(columns=["selection_date", "code", "return_10d", "selection_edge_10d"])
+
+    monkeypatch.setattr(validation, "walk_forward_validation", fake_walk_forward)
+    prices = pd.DataFrame({"date": pd.bdate_range("2025-01-01", periods=180)})
+    result = validation.walk_forward_dislocation_score_comparison(
+        pd.DataFrame(), prices, pd.DataFrame(), {"universe": {}, "screen": {}},
+        settings=WalkForwardConfig(minimum_history_trading_days=60), horizons=(10,),
+    )
+    assert modes == ["legacy_depth", "external_explained"]
+    assert len(result) == 2
+    assert result["確定エピソード数"].eq(0).all()
+
+
 def test_external_shock_attribution_decomposes_decline():
     frame = pd.DataFrame([
         {"return_6m": -0.25, "sector_return_6m_median": -0.19, "benchmark_return_6m": -0.07},

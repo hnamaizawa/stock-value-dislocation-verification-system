@@ -36,6 +36,9 @@ screen:
   minimum_external_shock_attribution: 0.0
   external_shock_attribution_when_missing: skip_with_warning
   external_shock_attribution_method: v2_sector_absolute
+  # The score scale is unchanged; compare this mode without changing its default.
+  dislocation_score_mode: legacy_depth
+  dislocation_score_attribution_missing: half
 
 # Demo/sample config never auto-learns. Actual-data config enables the guarded learner.
 rule_learning:

@@ -84,6 +84,8 @@ screen:
   minimum_external_shock_attribution: 0.0
   external_shock_attribution_when_missing: skip_with_warning
   external_shock_attribution_method: v2_sector_absolute
+  dislocation_score_mode: legacy_depth
+  dislocation_score_attribution_missing: half
   use_relative_underperformance_filter: true
   market_benchmark_mode: auto
   relative_filter_when_topix_missing: skip_with_warning

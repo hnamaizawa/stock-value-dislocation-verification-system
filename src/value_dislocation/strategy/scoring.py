@@ -36,7 +36,21 @@ def add_valuation_features(df: pd.DataFrame) -> pd.DataFrame:
     return out
 
 
-def score_candidates(df: pd.DataFrame) -> pd.DataFrame:
+def score_candidates(
+    df: pd.DataFrame,
+    *,
+    dislocation_score_mode: str = "legacy_depth",
+    attribution_missing_policy: str = "half",
+) -> pd.DataFrame:
+    """Score candidates with the legacy depth or externally explained decline rule.
+
+    Both modes preserve the existing 25 point dislocation scale. In external mode,
+    price declines are weighted by the v2 attribution ratio before being scaled.
+    """
+    if dislocation_score_mode not in {"legacy_depth", "external_explained"}:
+        dislocation_score_mode = "legacy_depth"
+    if attribution_missing_policy not in {"half", "zero"}:
+        attribution_missing_policy = "half"
     if df.empty:
         return df.assign(quality_score=pd.Series(dtype=float), valuation_score=pd.Series(dtype=float), dislocation_score=pd.Series(dtype=float), external_event_score=pd.Series(dtype=float), penalty=pd.Series(dtype=float), financial_penalty=pd.Series(dtype=float), review_penalty=pd.Series(dtype=float), quantitative_score=pd.Series(dtype=float), score=pd.Series(dtype=float), red_flags=pd.Series(dtype=str))
     rows = []
@@ -55,8 +69,19 @@ def score_candidates(df: pd.DataFrame) -> pd.DataFrame:
         valuation += _scale(r.get("pbr_vs_sector"), 0.55, 1.10, 5, inverse=True)
 
         dislocation = 0.0
-        dislocation += _scale(-r.get("drawdown_52w", 0), 0.15, 0.45, 14)
-        dislocation += _scale(-r.get("relative_return_6m", 0), 0.05, 0.30, 11)
+        drawdown_magnitude = -float(r.get("drawdown_52w", 0) or 0)
+        relative_decline = -float(r.get("relative_return_6m", 0) or 0)
+        if dislocation_score_mode == "external_explained":
+            attribution = pd.to_numeric(
+                pd.Series([r.get("external_shock_attribution_v2", r.get("external_shock_attribution"))]),
+                errors="coerce",
+            ).iloc[0]
+            weight = float(attribution) if pd.notna(attribution) else (0.5 if attribution_missing_policy == "half" else 0.0)
+            weight = float(np.clip(weight, 0.0, 1.0))
+            drawdown_magnitude *= weight
+            relative_decline *= weight
+        dislocation += _scale(drawdown_magnitude, 0.15, 0.45, 14)
+        dislocation += _scale(relative_decline, 0.05, 0.30, 11)
 
         external = 0.0
         external += _scale(r.get("externality"), 0.40, 1.00, 5)
@@ -91,6 +116,8 @@ def score_candidates(df: pd.DataFrame) -> pd.DataFrame:
                 "quality_score": round(quality, 2),
                 "valuation_score": round(valuation, 2),
                 "dislocation_score": round(dislocation, 2),
+                "dislocation_score_mode": dislocation_score_mode,
+                "dislocation_score_attribution_missing_policy": attribution_missing_policy,
                 "external_event_score": round(external, 2),
                 "penalty": round(penalty, 2),
                 "financial_penalty": round(financial_penalty, 2),
