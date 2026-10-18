@@ -8,8 +8,11 @@ def test_attribution_controls_and_comparison_are_visible_in_dashboard():
     for label in (
         "外因説明率の下限（%）",
         "外因説明率を計算できない場合",
-        "外因説明率で外れた件数",
+        "下限未達で外れた件数",
+        "計算不能で外れた件数",
         "計算できずに通した件数",
+        "外因説明率を計算できない銘柄の内訳",
+        "外因以外の条件を通過",
         "外因説明率・TOPIX条件の候補数を比較",
         "外因説明率・TOPIX条件をWalk-Forwardで比較",
     ):

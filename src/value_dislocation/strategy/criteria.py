@@ -211,6 +211,21 @@ def apply_quantitative_criteria(
     scored["external_shock_attribution_skipped"] = (
         ~attribution_available
         & attribution_pass
+        & (attribution_minimum > 0.0)
+        & (attribution_policy == "skip_with_warning")
+        & (selection_strategy == "value_dislocation")
+    )
+    attribution_values = _numeric_series(scored, "external_shock_attribution", index)
+    scored["external_shock_attribution_below_minimum"] = (
+        (attribution_minimum > 0.0)
+        & attribution_available
+        & attribution_values.lt(attribution_minimum)
+        & (selection_strategy == "value_dislocation")
+    )
+    scored["external_shock_attribution_missing_failed"] = (
+        (attribution_minimum > 0.0)
+        & ~attribution_available
+        & (attribution_policy == "fail")
         & (selection_strategy == "value_dislocation")
     )
     scored["pass_external_shock_attribution"] = attribution_pass.astype(bool)
@@ -462,6 +477,55 @@ def shortlist_from_table(table: pd.DataFrame, config: dict[str, Any]) -> pd.Data
     return result.head(maximum).reset_index(drop=True)
 
 
+def external_attribution_missing_diagnostics(table: pd.DataFrame) -> pd.DataFrame:
+    """Summarize unavailable-attribution counts for the full and pre-gate cohorts."""
+    reason_labels = ("6か月騰落が0以上", "比較データ不足", "業種データ不足")
+    if table.empty:
+        return pd.DataFrame([{
+            "対象": cohort,
+            "対象銘柄数": 0,
+            "計算不能件数": 0,
+            "計算不能割合": "—",
+            **{f"{reason}件数": 0 for reason in reason_labels},
+        } for cohort in ("全銘柄", "外因以外の条件を通過")])
+
+    reasons = table.get(
+        "external_shock_attribution_unavailable_reason",
+        pd.Series("", index=table.index, dtype="object"),
+    ).fillna("").astype(str)
+    pass_columns = [
+        column for column in table.columns
+        if column.startswith("pass_") and column != "pass_external_shock_attribution"
+    ]
+    if pass_columns:
+        other_conditions_pass = table[pass_columns].fillna(False).astype(bool).all(axis=1)
+    else:
+        other_conditions_pass = table.get(
+            "selected_for_review", pd.Series(False, index=table.index)
+        ).fillna(False).astype(bool)
+
+    cohorts = (
+        ("全銘柄", pd.Series(True, index=table.index)),
+        ("外因以外の条件を通過", other_conditions_pass),
+    )
+    rows: list[dict[str, int | float | str]] = []
+    for label, mask in cohorts:
+        scoped_reasons = reasons.loc[mask]
+        total = int(mask.sum())
+        missing = int(scoped_reasons.ne("").sum())
+        rows.append({
+            "対象": label,
+            "対象銘柄数": total,
+            "計算不能件数": missing,
+            "計算不能割合": f"{missing / total:.1%}" if total else "—",
+            **{
+                f"{reason}件数": int(scoped_reasons.eq(reason).sum())
+                for reason in reason_labels
+            },
+        })
+    return pd.DataFrame(rows)
+
+
 def screening_funnel(table: pd.DataFrame) -> list[dict[str, int | str]]:
     if table.empty:
         return [{"stage": "財務・株価データが揃う銘柄", "count": 0}]
@@ -500,8 +564,11 @@ def screening_funnel(table: pd.DataFrame) -> list[dict[str, int | str]]:
     if strategy != "active_trading":
         pass_attribution = table.get("pass_external_shock_attribution", pd.Series(True, index=table.index)).fillna(False).astype(bool)
         skipped = table.get("external_shock_attribution_skipped", pd.Series(False, index=table.index)).fillna(False).astype(bool)
+        below_minimum = table.get("external_shock_attribution_below_minimum", pd.Series(False, index=table.index)).fillna(False).astype(bool)
+        missing_failed = table.get("external_shock_attribution_missing_failed", (~pass_attribution & ~below_minimum)).fillna(False).astype(bool)
         result.extend([
-            {"stage": "外因説明率で外れた件数", "count": int((~pass_attribution).sum()), "diagnostic": True},
+            {"stage": "外因説明率の下限未達で外れた件数", "count": int(below_minimum.sum()), "diagnostic": True},
+            {"stage": "計算不能で外れた件数", "count": int(missing_failed.sum()), "diagnostic": True},
             {"stage": "計算できずに通した件数", "count": int(skipped.sum()), "diagnostic": True},
         ])
     return result

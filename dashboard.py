@@ -96,6 +96,7 @@ from value_dislocation.strategy.criteria import (
     apply_quantitative_criteria,
     copy_with_screen_overrides,
     external_attribution_screen_comparison,
+    external_attribution_missing_diagnostics,
     prepare_quantitative_universe,
     screening_funnel,
     shortlist_from_table,
@@ -366,6 +367,8 @@ ANALYSIS_ITEM_HELP = {
     "定量スコア": "財務や株価の条件への当てはまりを示す0〜85点の点数です。外的要因の人手レビューや根拠URLの有無では減点せず、財務上の問題は減点します。高得点でも値上がりを保証しません。",
     "スコア": "設定した条件への当てはまりを比べる目安です。高いほど将来の利益が大きいという意味ではありません。",
     "selected_for_review": "定量条件を通過し、人が詳しく確認する候補になったかを示します。",
+    "計算不能割合": "外因説明率を計算できなかった銘柄の割合です。行ごとに、全銘柄と外因説明率以外の条件を通った銘柄を分けています。",
+    "計算不能件数": "外因説明率を計算できなかった銘柄数です。理由別の件数は重複せず、この合計になります。",
     "selection_strategy": "銘柄を探すときに選んだ方法です。「株価が下がった企業を探す」か「値動きが大きい銘柄を探す」かを表します。",
     "抽出ルール": "銘柄を探すときに選んだ方法です。「株価が下がった企業を探す」か「値動きが大きい銘柄を探す」かを表します。",
     "final_evaluation": "財務や業績、最近の株価の動きをまとめた目安です。記号だけで売買を決めないでください。",
@@ -2090,9 +2093,14 @@ def render_condition_builder() -> None:
     _analysis_dataframe(pd.DataFrame(funnel), width="stretch", hide_index=True)
     if applied_strategy != "active_trading":
         funnel_counts = {str(item["stage"]): int(item["count"]) for item in funnel}
-        fc1, fc2 = st.columns(2)
-        fc1.metric("外因説明率で外れた件数", f"{funnel_counts.get('外因説明率で外れた件数', 0):,}")
-        fc2.metric("計算できずに通した件数", f"{funnel_counts.get('計算できずに通した件数', 0):,}")
+        fc1, fc2, fc3 = st.columns(3)
+        fc1.metric("下限未達で外れた件数", f"{funnel_counts.get('外因説明率の下限未達で外れた件数', 0):,}")
+        fc2.metric("計算不能で外れた件数", f"{funnel_counts.get('計算不能で外れた件数', 0):,}")
+        fc3.metric("計算できずに通した件数", f"{funnel_counts.get('計算できずに通した件数', 0):,}")
+        st.markdown("#### 外因説明率を計算できない銘柄の内訳")
+        missing_diagnostics = external_attribution_missing_diagnostics(audit)
+        _analysis_dataframe(missing_diagnostics, width="stretch", hide_index=True)
+        st.caption("割合は各行の対象銘柄数に対する計算不能件数です。「外因以外の条件を通過」は、外因説明率以外の必須条件と定量スコアを通った銘柄を指します。")
         st.caption("外因説明率は市場・業種の値下がりとの重なりを示す目安で、原因を証明するものではありません。")
 
         if st.button("外因説明率・TOPIX条件の候補数を比較", key="compare_attribution_screen"):

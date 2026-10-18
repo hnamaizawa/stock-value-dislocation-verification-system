@@ -8,9 +8,11 @@ import pandas as pd
 from value_dislocation.strategy.criteria import (
     apply_quantitative_criteria,
     build_quantitative_table,
+    external_attribution_missing_diagnostics,
     external_attribution_screen_comparison,
     screening_funnel,
 )
+from value_dislocation.strategy.attribution import add_external_shock_attribution
 from value_dislocation.strategy.features import price_features
 
 
@@ -223,7 +225,57 @@ def test_missing_attribution_policy_skip_warns_or_fails():
     skip_funnel = {row["stage"]: row["count"] for row in screening_funnel(skip.reset_index())}
     fail_funnel = {row["stage"]: row["count"] for row in screening_funnel(fail.reset_index())}
     assert skip_funnel["計算できずに通した件数"] == 1
-    assert fail_funnel["外因説明率で外れた件数"] == 1
+    assert skip_funnel["計算不能で外れた件数"] == 0
+    assert fail_funnel["計算不能で外れた件数"] == 1
+    assert fail_funnel["外因説明率の下限未達で外れた件数"] == 0
+
+
+def test_attribution_missing_reasons_and_cohort_rates_are_reported_separately():
+    evaluated = add_external_shock_attribution(pd.DataFrame({
+        "code": ["A", "B", "C", "D", "E"],
+        "return_6m": [-0.10, -0.10, 0.05, np.nan, -0.10],
+        "sector_return_6m_median": [-0.11, np.nan, np.nan, -0.20, -0.11],
+        "benchmark_return_6m": [-0.08, -0.08, np.nan, -0.08, np.nan],
+        "pass_other_quality": [True, True, True, False, True],
+        "pass_external_shock_attribution": [True, True, True, True, True],
+    }))
+    assert evaluated["external_shock_attribution_unavailable_reason"].tolist() == [
+        "", "業種データ不足", "6か月騰落が0以上", "比較データ不足", "比較データ不足",
+    ]
+
+    summary = external_attribution_missing_diagnostics(evaluated).set_index("対象")
+    all_stocks = summary.loc["全銘柄"]
+    other_passed = summary.loc["外因以外の条件を通過"]
+    assert all_stocks["対象銘柄数"] == 5
+    assert all_stocks["計算不能件数"] == 4
+    assert all_stocks["計算不能割合"] == "80.0%"
+    assert all_stocks["6か月騰落が0以上件数"] == 1
+    assert all_stocks["比較データ不足件数"] == 2
+    assert all_stocks["業種データ不足件数"] == 1
+    assert other_passed["対象銘柄数"] == 4
+    assert other_passed["計算不能件数"] == 3
+    assert other_passed["計算不能割合"] == "75.0%"
+    assert other_passed["比較データ不足件数"] == 1
+
+
+def test_attribution_funnel_separates_low_ratio_and_missing_rejections():
+    config = _config()
+    config["screen"].update({
+        "minimum_equity_ratio": 0.0,
+        "minimum_operating_cf_positive_ratio_3y": 0.0,
+        "minimum_sales_cagr_3y": -1.0,
+        "minimum_operating_margin": -1.0,
+        "minimum_drawdown_52w": 0.0,
+        "use_relative_underperformance_filter": False,
+        "minimum_sector_relative_return_6m": -1.0,
+        "minimum_external_shock_attribution": 0.95,
+        "external_shock_attribution_when_missing": "fail",
+    })
+    evaluated = apply_quantitative_criteria(_prepared_attribution_rows(), config)
+    funnel = {row["stage"]: row["count"] for row in screening_funnel(evaluated)}
+    assert funnel["外因説明率の下限未達で外れた件数"] == 2
+    assert funnel["計算不能で外れた件数"] == 1
+    assert funnel["計算できずに通した件数"] == 0
 
 
 def test_screen_comparison_reuses_prepared_rows_without_fetching(monkeypatch):
