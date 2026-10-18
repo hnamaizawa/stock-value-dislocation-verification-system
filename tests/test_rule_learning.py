@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import warnings
 from datetime import timedelta
 from pathlib import Path
 
@@ -13,6 +14,7 @@ from value_dislocation.strategy.rule_learning import (
     active_rules_path,
     learning_state_path,
     refresh_rule_learning_state,
+    _attach_forward_returns,
 )
 
 
@@ -100,6 +102,24 @@ def _write_synthetic_history(project_root: Path, *, count: int = 100) -> None:
         analysis_dir / "2024-01-01.csv.gz", index=False, compression="gzip"
     )
     pd.DataFrame(prices).to_csv(prices_dir / "prices.csv", index=False)
+
+
+def test_forward_return_date_initialization_has_no_numpy_deprecation_warning():
+    analysis = pd.DataFrame([{
+        "analysis_date": pd.Timestamp("2024-01-02"),
+        "code": "1000",
+        "close": 100.0,
+    }])
+    prices = pd.DataFrame([
+        {"date": pd.Timestamp("2024-01-02"), "code": "1000", "close": 100.0},
+        {"date": pd.Timestamp("2024-01-03"), "code": "1000", "close": 101.0},
+    ])
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", DeprecationWarning)
+        result = _attach_forward_returns(analysis, prices)
+
+    assert len(result) == 1
 
 
 def test_rule_learning_auto_applies_only_robust_out_of_sample_change(tmp_path: Path):

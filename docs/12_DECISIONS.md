@@ -1,5 +1,13 @@
 # Decision Log
 
+## ADR-026: NumPyの日時単位を明示する
+
+- 日付: 2026-10-19
+- 状態: Accepted
+- 背景: NumPyのgeneric datetime/timedelta単位が非推奨となり、テスト実行時に大量のDeprecationWarningが発生していた。
+- Decision: 欠損日時は `datetime64[ns]` のNaTとして初期化し、日付加算は日単位を明示する。警告をエラーにする回帰テストを追加する。
+- Boundary: 日付の意味、分析結果、データ取得、安全境界を変更しない。
+
 ## ADR-025: 外因説明分を重視する下落スコアを比較可能にする
 
 - 日付: 2026-10-19

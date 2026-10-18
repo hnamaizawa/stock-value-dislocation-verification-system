@@ -230,7 +230,7 @@ def test_walk_forward_bootstrap_interval_tightens_with_more_episodes():
         for i, value in enumerate(values * repeats):
             rows.append({
                 "episode_id": f"episode-{i}",
-                "selection_date": pd.Timestamp("2024-01-01") + pd.Timedelta(days=i),
+                "selection_date": pd.Timestamp("2024-01-01") + pd.Timedelta(i, unit="D"),
                 "code": f"{i:04d}",
                 "return_30d": value + 0.01,
                 "control_return_30d": 0.01,

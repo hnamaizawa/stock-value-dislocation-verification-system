@@ -1,3 +1,9 @@
+## v0.6.83 NumPy日時単位のDeprecationWarningを解消（完了）
+
+- [x] NumPyの欠損日時を `datetime64[ns]` として初期化する。
+- [x] テストの日付加算に日単位を明示する。
+- [x] 警告をエラーとして扱う回帰テストを追加し、pytestとHarnessを実行する。
+
 ## v0.6.82 外因説明率を使った下落スコア比較（完了）
 
 - [x] `legacy_depth` を既定値として維持し、`external_explained` と欠損時の半分/0点を追加。
