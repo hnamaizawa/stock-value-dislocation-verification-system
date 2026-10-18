@@ -82,6 +82,7 @@ from value_dislocation.validation import (
     walk_forward_cohort_summary,
     walk_forward_entry_timing_summary,
     walk_forward_external_attribution_comparison,
+    walk_forward_dislocation_score_comparison,
     walk_forward_summary,
     walk_forward_validation,
     walk_forward_history_diagnostics,
@@ -97,6 +98,7 @@ from value_dislocation.strategy.criteria import (
     apply_quantitative_criteria,
     copy_with_screen_overrides,
     external_attribution_screen_comparison,
+    dislocation_score_mode_comparison,
     external_attribution_missing_diagnostics,
     prepare_quantitative_universe,
     screening_funnel,
@@ -1684,6 +1686,8 @@ def _apply_values(overrides: dict) -> None:
     st.session_state["ui_external_attribution_pct"] = float(s.get("minimum_external_shock_attribution", 0.0)) * 100
     st.session_state["ui_attribution_missing_policy"] = str(s.get("external_shock_attribution_when_missing", "skip_with_warning"))
     st.session_state["ui_attribution_method"] = str(s.get("external_shock_attribution_method", "v2_sector_absolute"))
+    st.session_state["ui_dislocation_score_mode"] = str(s.get("dislocation_score_mode", "legacy_depth"))
+    st.session_state["ui_dislocation_missing"] = str(s.get("dislocation_score_attribution_missing", "half"))
     st.session_state["ui_require_forecast"] = bool(s.get("require_forecast", False))
     st.session_state["ui_require_sales_history"] = bool(s.get("require_sales_history", False))
     st.session_state["ui_min_score"] = int(round(s["quantitative_min_score"]))
@@ -1736,6 +1740,8 @@ def _initialize_condition_state() -> None:
     st.session_state.setdefault("ui_external_attribution_pct", 0.0)
     st.session_state.setdefault("ui_attribution_missing_policy", "skip_with_warning")
     st.session_state.setdefault("ui_attribution_method", "v2_sector_absolute")
+    st.session_state.setdefault("ui_dislocation_score_mode", "legacy_depth")
+    st.session_state.setdefault("ui_dislocation_missing", "half")
 
 
 def _current_overrides() -> dict:
@@ -1764,6 +1770,8 @@ def _current_overrides() -> dict:
             "minimum_external_shock_attribution": float(st.session_state.get("ui_external_attribution_pct", 0.0)) / 100,
             "external_shock_attribution_when_missing": str(st.session_state.get("ui_attribution_missing_policy", "skip_with_warning")),
             "external_shock_attribution_method": str(st.session_state.get("ui_attribution_method", "v2_sector_absolute")),
+            "dislocation_score_mode": str(st.session_state.get("ui_dislocation_score_mode", "legacy_depth")),
+            "dislocation_score_attribution_missing": str(st.session_state.get("ui_dislocation_missing", "half")),
             "require_forecast": bool(st.session_state["ui_require_forecast"]),
             "require_sales_history": bool(st.session_state["ui_require_sales_history"]),
             "quantitative_min_score": int(st.session_state["ui_min_score"]),
@@ -1988,6 +1996,33 @@ def render_condition_builder() -> None:
             )
             st.session_state["ui_attribution_method"] = attribution_method_options[method_label]
 
+        score_mode_options = {
+            "従来方式（下落幅そのもの）": "legacy_depth",
+            "外因説明分を重視": "external_explained",
+        }
+        score_mode_labels = list(score_mode_options)
+        score_mode_values = list(score_mode_options.values())
+        current_score_mode = str(st.session_state.get("ui_dislocation_score_mode", "legacy_depth"))
+        score_mode_index = score_mode_values.index(current_score_mode) if current_score_mode in score_mode_values else 0
+        dislocation_score_label = st.selectbox(
+            "株価下落の点数方式", score_mode_labels, index=score_mode_index,
+            disabled=active_mode,
+            help=METRIC_HELP["dislocation_score_mode"],
+        )
+        st.session_state["ui_dislocation_score_mode"] = score_mode_options[dislocation_score_label]
+        missing_score_options = {"半分の点を付ける": "half", "点を付けない": "zero"}
+        missing_score_labels = list(missing_score_options)
+        missing_score_values = list(missing_score_options.values())
+        current_missing_score = str(st.session_state.get("ui_dislocation_missing", "half"))
+        missing_score_index = missing_score_values.index(current_missing_score) if current_missing_score in missing_score_values else 0
+        missing_score_label = st.selectbox(
+            "外因説明率が計算できない場合の下落点", missing_score_labels,
+            index=missing_score_index,
+            disabled=active_mode or score_mode_options[dislocation_score_label] != "external_explained",
+            help=METRIC_HELP["dislocation_score_attribution_missing"],
+        )
+        st.session_state["ui_dislocation_missing"] = missing_score_options[missing_score_label]
+
         st.markdown("### 5. 値動き活発型の条件")
         dt1, dt2, dt3 = st.columns(3)
         with dt1:
@@ -2132,6 +2167,17 @@ def render_condition_builder() -> None:
             st.markdown("#### 同じデータ・同じ基準日の候補数比較")
             _analysis_dataframe(candidate_comparison, width="stretch", hide_index=True)
             st.caption("他の条件と評価データを固定し、新旧2方式・外因説明率0/30/50/70%・TOPIX比-8%条件の有無を比較します。画面操作によるデータ取得はありません。")
+
+        if st.button("株価下落の点数方式を同じデータで比較", key="compare_dislocation_score_modes"):
+            dynamic_config = copy_with_screen_overrides(base_config, overrides)
+            st.session_state["dislocation_score_mode_comparison"] = dislocation_score_mode_comparison(
+                bundle["prepared"], dynamic_config
+            )
+        score_mode_comparison = st.session_state.get("dislocation_score_mode_comparison")
+        if isinstance(score_mode_comparison, pd.DataFrame):
+            st.markdown("#### 同じデータ・同じ基準日の点数方式比較")
+            _analysis_dataframe(score_mode_comparison, width="stretch", hide_index=True)
+            st.caption("比較時に外部サービスからデータは取得しません。現在の点数方式の初期値は従来方式のままです。")
 
     export_document = profile_document("current_conditions", st.session_state["condition_preset"], overrides)
     export_json = json.dumps(export_document, ensure_ascii=False, indent=2)
@@ -2955,6 +3001,44 @@ def _render_history_walk_forward() -> None:
         st.markdown("#### 外因説明率の計算方式・下限・TOPIX条件別のWalk-Forward成績")
         _analysis_dataframe(shown, width="stretch", hide_index=True)
         st.caption("選択効果は候補平均から類似非選択平均を引いた値です。プラス率と確定件数を合わせて確認してください。条件以外は固定しており、将来成績は選定後の採点にのみ使います。")
+
+    if st.button(
+        "株価下落の点数方式をWalk-Forwardで比較",
+        key="run_walk_forward_dislocation_score_comparison",
+        help="従来方式と外因説明分を重視する方式を、同じローカルデータ・同じ過去時点で比較します。外部データは取得しません。",
+    ):
+        local_data = load_curated_latest(ROOT)
+        score_config = copy_with_screen_overrides(load_config(REAL_CONFIG), _current_overrides())
+        score_settings = WalkForwardConfig(
+            max_snapshots=int(snapshots),
+            spacing_trading_days=int(spacing),
+            controls_per_event=int(controls),
+        )
+        score_horizons = supported_walk_forward_horizons(
+            local_data["prices"], result_horizons,
+            minimum_history_trading_days=score_settings.minimum_history_trading_days,
+            entry_delay_trading_days=score_settings.entry_delay_trading_days,
+        )
+        if not score_horizons:
+            st.warning("保存済み日足では選択した期間を比較できません。日足が蓄積されてから再実行してください。")
+        else:
+            score_result = walk_forward_dislocation_score_comparison(
+                local_data["companies"], local_data["prices"], local_data["financials"],
+                score_config, settings=score_settings, horizons=score_horizons,
+                cache_dir=WALK_FORWARD_CACHE,
+                data_signature=f"{_walk_forward_data_signature()}:{__version__}",
+                historical_masters=load_security_master_history(ROOT),
+            )
+            st.session_state["walk_forward_dislocation_score_comparison"] = score_result
+    score_wf_comparison = st.session_state.get("walk_forward_dislocation_score_comparison")
+    if isinstance(score_wf_comparison, pd.DataFrame) and not score_wf_comparison.empty:
+        score_display = score_wf_comparison.copy()
+        for column in ["選択効果", "選択効果95%信頼区間下限", "選択効果95%信頼区間上限", "候補プラス率", "信頼区間が0以下となる再標本割合"]:
+            if column in score_display:
+                score_display[column] = pd.to_numeric(score_display[column], errors="coerce") * 100
+        st.markdown("#### 同じ過去時点での株価下落スコア方式比較")
+        _analysis_dataframe(score_display, width="stretch", hide_index=True)
+        st.caption("選択効果の95%範囲が0をまたぐ場合、候補側が良かったとは判断できません。再標本割合はこの検証データ内のばらつきの目安で、将来の成功確率ではありません。確定件数はエピソード数と延べ件数を併記しています。")
 
     events = st.session_state.get("walk_forward_validation_events")
     if not isinstance(events, pd.DataFrame) or events.empty:

@@ -1,6 +1,6 @@
 schema_version: '1.0'
 blueprint_name: japanese-equity-value-dislocation-research
-blueprint_version: 0.6.80
+blueprint_version: 0.6.82
 canonical_project: stock-value-dislocation-verification-system
 purpose: Generate a local-first Japanese equity research application that finds
   potentially sound Japanese companies depressed by external factors, tracks possible
@@ -47,6 +47,7 @@ required_capabilities:
 - point_in_time_walk_forward_validation
 - matched_nonselected_control_comparison
 - external_shock_attribution_decomposition
+- dislocation_score_mode_comparison
 - trading_session_forward_return_horizons
 - survivorship_coverage_audit
 - dated_historical_security_master_archive
@@ -114,6 +115,9 @@ non_negotiable_invariants:
 - matched_controls_must_exclude_selected_securities
 - external_shock_attribution_must_not_replace_human_event_review
 - external_attribution_v2_must_use_absolute_sector_decline
+- external_explained_dislocation_mode_must_use_v2_attribution
+- dislocation_score_mode_default_must_remain_legacy_depth
+- dislocation_score_scale_must_remain_85_points
 - walk_forward_validation_must_not_trigger_market_data_fetch
 - walk_forward_horizons_must_use_trading_sessions
 - walk_forward_must_report_survivorship_coverage
@@ -179,8 +183,10 @@ required_files:
 - src/value_dislocation/history_visuals.py
 - src/value_dislocation/walkforward_cache.py
 - src/value_dislocation/strategy/attribution.py
+- src/value_dislocation/strategy/scoring.py
 - docs/20_WALK_FORWARD_VALIDATION.md
 - tests/test_walkforward_controls_attribution.py
+- tests/test_scoring.py
 - tests/test_security_master_history.py
 - tests/test_walkforward_cache.py
 - tests/test_analysis_tooltips.py

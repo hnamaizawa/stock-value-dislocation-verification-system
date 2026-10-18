@@ -794,3 +794,81 @@ def attribution_outcome_summary(events: pd.DataFrame, *, horizon_days: int = 30)
     frame["_return"] = _numeric(frame, f"return_{int(horizon_days)}d")
     grouped = frame.groupby("外因説明率帯", observed=True)["_return"]
     return grouped.agg(件数="count", 平均リターン="mean", プラス率=lambda s: float((s > 0).mean())).reset_index()
+
+
+def walk_forward_dislocation_score_comparison(
+    companies: pd.DataFrame,
+    prices: pd.DataFrame,
+    financials: pd.DataFrame,
+    config: dict,
+    *,
+    settings: WalkForwardConfig,
+    horizons: Iterable[int],
+    cache_dir: Path | None = None,
+    data_signature: str = "",
+    historical_masters: list[SecurityMasterSnapshot] | None = None,
+    progress: Callable[[dict], None] | None = None,
+) -> pd.DataFrame:
+    """Compare both scoring modes using an identical point-in-time schedule."""
+    output: list[dict] = []
+    horizon_values = tuple(int(h) for h in horizons)
+    replay_dates = _walk_forward_dates(
+        prices,
+        max_snapshots=settings.max_snapshots,
+        spacing_trading_days=settings.spacing_trading_days,
+        minimum_history_trading_days=settings.minimum_history_trading_days,
+        required_future_sessions=max(horizon_values, default=10) + max(settings.entry_delay_trading_days, default=0),
+    )
+    date_position = {pd.Timestamp(d).date().isoformat(): i for i, d in enumerate(replay_dates)}
+    for variant_no, mode in enumerate(("legacy_depth", "external_explained"), start=1):
+        variant_config = deepcopy(config)
+        variant_config.setdefault("screen", {})["dislocation_score_mode"] = mode
+        events = walk_forward_validation(
+            companies, prices, financials, variant_config,
+            settings=settings, horizons=horizon_values,
+            cache_dir=cache_dir,
+            data_signature=f"{data_signature}:dislocation-score:{mode}",
+            historical_masters=historical_masters,
+            progress=(lambda info, n=variant_no: progress({**info, "variant": n, "total_variants": 2}) if progress else None),
+        )
+        mode_label = "従来方式（下落幅そのもの）" if mode == "legacy_depth" else "外因説明分を重視"
+        for horizon in horizon_values:
+            row = events.copy()
+            selected_return = _numeric(row, f"return_{horizon}d")
+            edge = _numeric(row, f"selection_edge_{horizon}d")
+            row = row.loc[selected_return.notna() & edge.notna()].copy()
+            if row.empty:
+                output.append({
+                    "点数方式": mode_label, "期間": f"{horizon}取引日",
+                    "候補数（全時点延べ）": len(events), "選択効果": None,
+                    "選択効果95%信頼区間下限": None, "選択効果95%信頼区間上限": None,
+                    "候補プラス率": None, "確定エピソード数": 0,
+                    "確定延べ件数": 0, "信頼区間が0以下となる再標本割合": None,
+                })
+                continue
+            row["_position"] = row["selection_date"].astype(str).map(date_position)
+            row = row.sort_values(["code", "_position"])
+            prior_pos = row.groupby("code", sort=False)["_position"].shift(1)
+            starts_episode = prior_pos.isna() | row["_position"].sub(prior_pos).ne(1)
+            episodes = row.loc[starts_episode].copy()
+            episode_returns = _numeric(episodes, f"return_{horizon}d").dropna()
+            episode_edges = _numeric(episodes, f"selection_edge_{horizon}d").dropna()
+            low = high = at_or_below_zero = None
+            if len(episode_edges):
+                rng = np.random.default_rng(20261018)
+                samples = rng.choice(episode_edges.to_numpy(dtype=float), size=(2000, len(episode_edges)), replace=True).mean(axis=1)
+                low, high = (float(v) for v in np.quantile(samples, [0.025, 0.975]))
+                at_or_below_zero = float(np.mean(samples <= 0))
+            output.append({
+                "点数方式": mode_label,
+                "期間": f"{horizon}取引日",
+                "候補数（全時点延べ）": len(events),
+                "選択効果": float(episode_edges.mean()) if len(episode_edges) else None,
+                "選択効果95%信頼区間下限": low,
+                "選択効果95%信頼区間上限": high,
+                "候補プラス率": float((episode_returns > 0).mean()) if len(episode_returns) else None,
+                "確定エピソード数": int(len(episode_returns)),
+                "確定延べ件数": int(len(row)),
+                "信頼区間が0以下となる再標本割合": at_or_below_zero,
+            })
+    return pd.DataFrame(output)

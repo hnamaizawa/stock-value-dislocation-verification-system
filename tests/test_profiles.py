@@ -17,6 +17,8 @@ def test_beginner_presets_have_required_sections_and_valid_ranges():
         overrides = preset_overrides(name)
         assert overrides["universe"]["allowed_markets"]
         screen = overrides["screen"]
+        assert screen["dislocation_score_mode"] == "legacy_depth"
+        assert screen["dislocation_score_attribution_missing"] == "half"
         assert 0 <= screen["minimum_equity_ratio"] <= 1
         assert 0 <= screen["minimum_operating_cf_positive_ratio_3y"] <= 1
         assert screen["minimum_drawdown_52w"] <= 0
@@ -46,6 +48,8 @@ def test_legacy_profile_without_score_scale_converts_once_without_rewriting_file
     loaded = load_profile(path)
     assert loaded["overrides"]["screen"]["quantitative_min_score"] == 70
     assert loaded["overrides"]["screen"]["external_shock_attribution_method"] == "v2_sector_absolute"
+    assert loaded["overrides"]["screen"]["dislocation_score_mode"] == "legacy_depth"
+    assert loaded["overrides"]["screen"]["dislocation_score_attribution_missing"] == "half"
     assert loaded["score_scale"]
     assert load_profile(path)["overrides"]["screen"]["quantitative_min_score"] == 70
     assert path.read_bytes() == original

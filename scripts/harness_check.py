@@ -255,13 +255,20 @@ def check_topix_no_substitution(root: Path) -> CheckResult:
 
 def check_explainable_screening(root: Path) -> CheckResult:
     criteria = (root / "src/value_dislocation/strategy/criteria.py").read_text(encoding="utf-8")
+    scoring = (root / "src/value_dislocation/strategy/scoring.py").read_text(encoding="utf-8")
+    scoring_tests = (root / "tests/test_scoring.py").read_text(encoding="utf-8")
     pipeline = (root / "src/value_dislocation/real_pipeline.py").read_text(encoding="utf-8")
     dashboard = (root / "dashboard.py").read_text(encoding="utf-8")
     required = [
         "pass_reasons", "fail_reasons", "warning_reasons", "screening_funnel",
         "quantitative_audit_latest.csv", "候補になった理由",
     ]
-    combined = criteria + pipeline + dashboard
+    required.extend([
+        "dislocation_score_mode", "external_explained", "external_shock_attribution_v2",
+        "test_external_explained_mode_weights_decline_points_by_attribution",
+        "test_external_explained_missing_attribution_half_or_zero",
+    ])
+    combined = criteria + pipeline + dashboard + scoring + scoring_tests
     missing = [term for term in required if term not in combined]
     return CheckResult("explainable_screening", not missing, "missing=" + ", ".join(missing) if missing else "ok")
 
@@ -566,6 +573,9 @@ def check_blueprint(root: Path) -> CheckResult:
         "walk_forward_zero_candidate_must_show_point_in_time_rejection_reasons",
         "walk_forward_must_use_last_submitted_session_screen_config",
         "walk_forward_must_explain_insufficient_local_price_history",
+        "dislocation_score_mode_default_must_remain_legacy_depth",
+        "external_explained_dislocation_mode_must_use_v2_attribution",
+        "dislocation_score_scale_must_remain_85_points",
         "walk_forward_replay_must_have_252_sessions_before_selection",
         "walk_forward_stats_must_resample_episodes",
         "learned_rules_must_exclude_final_holdout_prices",

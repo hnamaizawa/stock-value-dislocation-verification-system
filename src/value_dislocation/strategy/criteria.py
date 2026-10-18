@@ -188,6 +188,23 @@ def apply_quantitative_criteria(
     attribution_method = str(s.get("external_shock_attribution_method", "v2_sector_absolute"))
     scored = add_external_shock_attribution(scored, method=attribution_method)
 
+    # The alternative scoring mode is deliberately pinned to the corrected v2
+    # attribution formula even while the user compares legacy attribution screens.
+    dislocation_mode = str(s.get("dislocation_score_mode", "legacy_depth"))
+    missing_score_policy = str(s.get("dislocation_score_attribution_missing", "half"))
+    if dislocation_mode not in {"legacy_depth", "external_explained"}:
+        dislocation_mode = "legacy_depth"
+    v2_attribution = add_external_shock_attribution(scored, method="v2_sector_absolute")
+    scored["external_shock_attribution_v2"] = pd.to_numeric(
+        v2_attribution["external_shock_attribution"], errors="coerce"
+    )
+    scored = score_candidates(
+        scored,
+        dislocation_score_mode=dislocation_mode,
+        attribution_missing_policy=missing_score_policy,
+    )
+    scored["quantitative_score"] = scored["quantitative_score"].clip(0, 85)
+
     attribution_minimum = float(s.get("minimum_external_shock_attribution", 0.0))
     attribution_minimum = min(max(attribution_minimum, 0.0), 1.0)
     attribution_policy = str(s.get("external_shock_attribution_when_missing", "skip_with_warning"))
@@ -612,4 +629,24 @@ def external_attribution_screen_comparison(
                         if "selected_for_review" in evaluated.columns else 0
                     ),
                 })
+    return pd.DataFrame(rows)
+
+
+def dislocation_score_mode_comparison(prepared: pd.DataFrame, config: dict[str, Any]) -> pd.DataFrame:
+    """Compare candidate counts for both score modes on the same snapshot."""
+    rows: list[dict[str, Any]] = []
+    for mode in ("legacy_depth", "external_explained"):
+        variant = copy_with_screen_overrides(config, {"screen": {"dislocation_score_mode": mode}})
+        evaluated = apply_quantitative_criteria(prepared, variant)
+        rows.append({
+            "点数方式": "従来方式（下落幅そのもの）" if mode == "legacy_depth" else "外因説明分を重視",
+            "基準日": (
+                pd.to_datetime(prepared["as_of"], errors="coerce").dropna().max().date().isoformat()
+                if "as_of" in prepared and pd.to_datetime(prepared["as_of"], errors="coerce").notna().any()
+                else "同一の集約済みスナップショット"
+            ),
+            "定量候補数": int(evaluated.get("selected_for_review", pd.Series(False, index=evaluated.index)).fillna(False).astype(bool).sum()),
+            "平均定量スコア": float(pd.to_numeric(evaluated.loc[evaluated.get("selected_for_review", False), "quantitative_score"], errors="coerce").mean())
+            if "quantitative_score" in evaluated and evaluated.get("selected_for_review", pd.Series(False, index=evaluated.index)).fillna(False).any() else None,
+        })
     return pd.DataFrame(rows)
