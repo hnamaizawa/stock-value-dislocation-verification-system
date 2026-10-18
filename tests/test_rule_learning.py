@@ -41,6 +41,7 @@ def _base_config(*, auto_apply: bool = True) -> dict:
             "auto_apply": auto_apply,
             "primary_horizon_days": 90,
             "minimum_mature_events": 40,
+            "final_holdout_trading_days": 0,
             "minimum_train_events": 20,
             "minimum_validation_events": 10,
             "train_fraction": 0.70,
@@ -136,6 +137,30 @@ def test_rule_learning_waits_for_enough_mature_history(tmp_path: Path):
 
     assert state["status"] == "insufficient_history"
     assert state["mature_event_count"] < state["required_mature_events"]
+    assert not active_rules_path(tmp_path).exists()
+
+
+def test_final_holdout_period_is_excluded_from_rule_learning(tmp_path: Path):
+    analysis_dir = tmp_path / "data" / "history" / "analysis"
+    prices_dir = tmp_path / "data" / "curated" / "latest"
+    analysis_dir.mkdir(parents=True)
+    prices_dir.mkdir(parents=True)
+    dates = pd.bdate_range("2024-01-02", periods=400)
+    pd.DataFrame([
+        {"analysis_date": dates[100], "code": "1000", "selection_strategy": "value_dislocation", "close": 100.0},
+        {"analysis_date": dates[300], "code": "1000", "selection_strategy": "value_dislocation", "close": 100.0},
+    ]).to_csv(analysis_dir / "2024-01-01.csv.gz", index=False, compression="gzip")
+    pd.DataFrame({"date": dates, "code": "1000", "close": range(100, 500)}).to_csv(prices_dir / "prices.csv", index=False)
+    config = _base_config(auto_apply=False)
+    config["rule_learning"].update({"minimum_mature_events": 100, "final_holdout_trading_days": 60})
+
+    state = refresh_rule_learning_state(tmp_path, config, force=True)
+
+    assert state["mature_event_count_before_final_holdout"] == 2
+    assert state["mature_event_count"] == 1
+    assert state["final_holdout_excluded_event_count"] == 1
+    assert state["final_holdout_start"] == dates[-60].date().isoformat()
+    assert state["status"] == "insufficient_history"
     assert not active_rules_path(tmp_path).exists()
 
 

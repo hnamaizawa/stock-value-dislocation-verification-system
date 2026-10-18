@@ -98,13 +98,14 @@ screen:
   maximum_payout_ratio: 0.80
   exclude_forecast_dividend_cut: false
 
-# Point-in-time analysis history + already persisted local prices are used to improve
-# quantitative thresholds. No market-data fetch is allowed from the learner.
+# Point-in-time history and local prices are used to propose rule changes only.
+# No market-data fetch or automatic rule application is enabled by default.
 rule_learning:
   enabled: true
-  auto_apply: true
+  auto_apply: false
   primary_horizon_days: 90
-  minimum_mature_events: 40
+  minimum_mature_events: 100
+  final_holdout_trading_days: 60
   minimum_train_events: 20
   minimum_validation_events: 10
   train_fraction: 0.70

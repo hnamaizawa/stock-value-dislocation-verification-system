@@ -84,6 +84,7 @@ from value_dislocation.validation import (
     walk_forward_external_attribution_comparison,
     walk_forward_summary,
     walk_forward_validation,
+    walk_forward_history_diagnostics,
 )
 from value_dislocation.hypothesis_invalidation import (
     METRIC_DEFINITIONS,
@@ -2644,6 +2645,26 @@ def _render_history_walk_forward() -> None:
         "生存者バイアス注意: 現在のcurated会社マスターに存在しない過去銘柄は復元できません。"
         "結果には会社マスターのカバレッジを記録し、欠落を可視化します。完全な除去には過去時点の銘柄マスターが必要です。"
     )
+    learning_config = load_config(REAL_CONFIG).get("rule_learning", {})
+    required_episodes = int(learning_config.get("minimum_mature_events", 100))
+    holdout_days = int(learning_config.get("final_holdout_trading_days", 60))
+    learning_state_path = ROOT / "data/history/rule_learning/state.json"
+    try:
+        learning_state = json.loads(learning_state_path.read_text(encoding="utf-8")) if learning_state_path.exists() else {}
+    except Exception:
+        learning_state = {}
+    mature_episodes = int(learning_state.get("mature_event_count", 0))
+    st.info(
+        f"ルール調整に使える確定エピソード: {mature_episodes:,}/{required_episodes:,}件。"
+        f"最後の{holdout_days:,}取引日は最終確認用として学習から除外します。"
+        + ("条件案は表示のみで、自動適用しません。" if not bool(learning_config.get("auto_apply", False)) else "")
+    )
+    proposal = learning_state.get("best_proposal")
+    if isinstance(proposal, dict):
+        st.caption(
+            f"ルール案: {proposal.get('rule', '条件')} を {proposal.get('candidate', '-') } にする案です。"
+            "最終確認用の期間には適用せず、提案として表示しています。"
+        )
     modes = {
         "簡易": {
             "description": "3時点・10/30/90取引日。条件を素早く確認します。",
@@ -2723,6 +2744,10 @@ def _render_history_walk_forward() -> None:
             minimum_history_trading_days=settings.minimum_history_trading_days,
             entry_delay_trading_days=settings.entry_delay_trading_days,
         )
+        history_diagnostics = walk_forward_history_diagnostics(
+            data["prices"], settings=settings, horizons=horizons or requested_horizons
+        )
+        st.session_state["walk_forward_history_diagnostics"] = history_diagnostics
         st.session_state["walk_forward_validation_attempted"] = True
         unique_sessions = (
             pd.to_datetime(
@@ -2851,6 +2876,21 @@ def _render_history_walk_forward() -> None:
             else:
                 st.success(f"Walk-Forward検証を完了しました。候補イベント {len(events):,} 件です。")
 
+    history_diagnostics = st.session_state.get("walk_forward_history_diagnostics")
+    if isinstance(history_diagnostics, dict):
+        st.markdown("#### 必要な過去データを満たさず除外した再現日")
+        st.caption(
+            f"52週・6か月の特徴を本番と同じ長さで計算するため、評価日より前に"
+            f"{history_diagnostics.get('required_history_trading_days', 252):,}取引日分を要求します。"
+            f"現在の保存日足は{history_diagnostics.get('available_trading_days', 0):,}取引日分です。"
+            f"予定した再現日{history_diagnostics.get('scheduled_replay_dates', 0):,}日のうち、"
+            f"履歴不足で{history_diagnostics.get('excluded_for_insufficient_history', 0):,}日、"
+            f"将来評価データ不足で{history_diagnostics.get('excluded_for_insufficient_future', 0):,}日を除外し、"
+            f"{history_diagnostics.get('usable_replay_dates', 0):,}日を利用できます。"
+            f"個別銘柄でも252件未満の価格履歴は選定母集団から外します"
+            f"（再現日×銘柄の除外 {history_diagnostics.get('excluded_security_date_pairs', 0):,}件）。"
+        )
+
     result_horizons = tuple(
         int(value) for value in st.session_state.get(
             "walk_forward_validation_horizons", tuple(horizons)
@@ -2930,7 +2970,9 @@ def _render_history_walk_forward() -> None:
     summary = walk_forward_summary(events, horizons=result_horizons)
     dates = pd.to_datetime(events.get("selection_date"), errors="coerce").dropna()
     m1, m2, m3, m4 = st.columns(4)
-    m1.metric("候補イベント", f"{len(events):,}件", help=_analysis_help("候補イベント"))
+    episode_count = int(events.get("episode_id", pd.Series(events.index, index=events.index)).nunique())
+    m1.metric("候補エピソード", f"{episode_count:,}件", help="同じ銘柄が連続する再現日に選ばれた場合、最初の日を起点に1件と数えます。")
+    st.caption(f"候補イベントの延べ件数: {len(events):,}件。同じ銘柄が別の時点で再び選ばれた場合は延べ件数に含みます。")
     m2.metric("再現時点", f"{events.get('selection_date', pd.Series(dtype=str)).nunique():,}日", help=_analysis_help("再現時点"))
     m3.metric("検証期間", f"{dates.min().date()} ～ {dates.max().date()}" if not dates.empty else "-", help=_analysis_help("検証期間"))
     coverage = pd.to_numeric(events.get("master_coverage_ratio"), errors="coerce").dropna()
@@ -2955,7 +2997,7 @@ def _render_history_walk_forward() -> None:
         )
 
     display = summary.copy()
-    for col in ["候補平均", "候補プラス率", "類似非選択平均", "選択効果", "選択効果プラス率"]:
+    for col in ["候補平均", "候補プラス率", "類似非選択平均", "選択効果", "選択効果プラス率", "選択効果95%区間下限", "選択効果95%区間上限"]:
         if col in display.columns:
             display[col] = pd.to_numeric(display[col], errors="coerce") * 100
     st.markdown("#### 現在ルールのWalk-Forward成績")
@@ -2965,6 +3007,16 @@ def _render_history_walk_forward() -> None:
         "青い棒は候補に選ばれた銘柄、赤い棒は条件が似ていたが選ばれなかった銘柄の平均株価変化です。紫の印は両者の差で、0より上なら候補側の成績が上でした。"
         "横の棒はそれぞれの平均を表し、積み上げていません。これは過去の比較で、選び方が差の原因だと証明するものではありません。"
     )
+    if "信頼区間が0を含む" in summary.columns:
+        uncertain = summary.loc[summary["信頼区間が0を含む"].fillna(True), "期間"].tolist()
+        if uncertain:
+            st.warning(
+                "選択効果の95%範囲が0を含む期間（"
+                + "、".join(map(str, uncertain))
+                + "）は、候補選びに効果があるとはまだ言えません。"
+                "再標本化で効果が0以下となった割合も参考として表示しています。"
+            )
+        st.caption("95%範囲と『0以下となる割合』は、選択エピソードを単位に再標本化した目安です。因果関係や将来の利益を保証しません。")
 
     available_horizons = [
         value for value in result_horizons
