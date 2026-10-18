@@ -34,6 +34,7 @@ def test_readme_has_single_top_level_version_history_in_descending_order():
     assert "Version: **0.6.51**" not in readme
     versions = [
         "### v0.6.82 外因説明率を使った下落スコア比較",
+        "### v0.6.81 Walk-Forwardの定義・件数・確からしさ",
         "### v0.6.80 外因説明率を業種全体の下落分で計算",
         "### v0.6.79 外因説明率の計算不能内訳",
         "### v0.6.78 外因説明率条件と比較",

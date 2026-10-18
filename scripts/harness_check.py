@@ -435,6 +435,10 @@ def check_walk_forward_invariants(root: Path) -> CheckResult:
         "walk_forward_entry_timing_summary",
         "entry_delay_trading_days",
         "supported_walk_forward_horizons",
+        "walk_forward_history_diagnostics",
+        "minimum_history_trading_days: int = 252",
+        "_bootstrap_selection_edge",
+        "episode_start_date",
         "fail_reason_counts",
     ]
     required_tests = [
@@ -447,6 +451,9 @@ def check_walk_forward_invariants(root: Path) -> CheckResult:
         "test_walk_forward_caps_horizons_to_available_price_history",
         "test_walk_forward_horizon_support_boundary_and_empty_history",
         "test_walk_forward_reports_point_in_time_rejection_diagnostics",
+        "test_walk_forward_history_diagnostics_reports_short_replay_and_security_history",
+        "test_consecutive_replay_selections_are_one_episode",
+        "test_walk_forward_bootstrap_interval_tightens_with_more_episodes",
         "test_applied_screen_overrides_replace_base_rules_for_walk_forward",
         "test_v2_attribution_matches_four_sector_absolute_cases",
         "test_v2_attribution_is_unavailable_for_non_decline_or_insufficient_sector_data",
@@ -471,6 +478,9 @@ def check_walk_forward_invariants(root: Path) -> CheckResult:
         "load_security_master_history", "現在マスターで代用しています",
         "判定段階別の成績", "反転確認済み◎☆の買付タイミング比較",
         "今回の評価期間:",
+        "必要な過去データを満たさず除外した再現日",
+        "最後の{holdout_days:,}取引日は最終確認用として学習から除外します。",
+        "選択効果の95%範囲が0を含む期間",
         "過去時点で現在の抽出条件を満たす候補は0件でした。",
         "候補にならなかった主な条件",
         "copy_with_screen_overrides(cfg, _current_overrides())",
@@ -566,6 +576,9 @@ def check_blueprint(root: Path) -> CheckResult:
         "dislocation_score_mode_default_must_remain_legacy_depth",
         "external_explained_dislocation_mode_must_use_v2_attribution",
         "dislocation_score_scale_must_remain_85_points",
+        "walk_forward_replay_must_have_252_sessions_before_selection",
+        "walk_forward_stats_must_resample_episodes",
+        "learned_rules_must_exclude_final_holdout_prices",
         "analysis_explanations_must_define_result_meaning_and_limitations",
     }
     invariants = set(blueprint.get("non_negotiable_invariants", []))

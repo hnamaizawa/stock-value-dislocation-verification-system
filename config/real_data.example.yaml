@@ -96,6 +96,16 @@ screen:
   maximum_payout_ratio: 0.80
   exclude_forecast_dividend_cut: false
 
+rule_learning:
+  enabled: true
+  auto_apply: false
+  primary_horizon_days: 90
+  minimum_mature_events: 100
+  final_holdout_trading_days: 60
+  minimum_train_events: 20
+  minimum_validation_events: 10
+  minimum_event_gap_days: 30
+
 risk:
   trading_capital_yen: 3000000
   max_total_invested_ratio: 0.60

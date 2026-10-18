@@ -45,7 +45,8 @@ rule_learning:
   enabled: false
   auto_apply: false
   primary_horizon_days: 90
-  minimum_mature_events: 40
+  minimum_mature_events: 100
+  final_holdout_trading_days: 60
   minimum_train_events: 20
   minimum_validation_events: 10
   train_fraction: 0.70

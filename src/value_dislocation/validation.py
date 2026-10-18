@@ -23,7 +23,9 @@ class WalkForwardConfig:
     max_snapshots: int = 8
     spacing_trading_days: int = 20
     controls_per_event: int = 5
-    minimum_history_trading_days: int = 60
+    # Production features use up to 252 observations for 52-week drawdown.
+    # A replay date with less history would silently use a different definition.
+    minimum_history_trading_days: int = 252
     entry_delay_trading_days: tuple[int, ...] = (3, 5)
 
 
@@ -31,7 +33,7 @@ def supported_walk_forward_horizons(
     prices: pd.DataFrame,
     horizons: Iterable[int],
     *,
-    minimum_history_trading_days: int = 60,
+    minimum_history_trading_days: int = 252,
     entry_delay_trading_days: Iterable[int] = (3, 5),
 ) -> tuple[int, ...]:
     """Keep requested horizons whose future outcomes can fit the stored price history.
@@ -45,7 +47,7 @@ def supported_walk_forward_horizons(
         return ()
     dates = pd.to_datetime(prices["date"], errors="coerce").dropna().dt.normalize().unique()
     maximum_delay = max((int(value) for value in entry_delay_trading_days), default=0)
-    maximum_supported_horizon = len(dates) - int(minimum_history_trading_days) - maximum_delay - 1
+    maximum_supported_horizon = len(dates) - int(minimum_history_trading_days) - maximum_delay
     return tuple(sorted({int(value) for value in horizons if int(value) <= maximum_supported_horizon}))
 
 
@@ -85,15 +87,72 @@ def _walk_forward_dates(
         return []
     dates = pd.Series(pd.to_datetime(prices["date"], errors="coerce").dropna().dt.normalize().unique()).sort_values().tolist()
     future_sessions = max(int(required_future_sessions), 1)
-    if len(dates) <= minimum_history_trading_days + future_sessions:
+    if len(dates) < minimum_history_trading_days + future_sessions:
         return []
     latest_usable_index = len(dates) - future_sessions - 1
     candidates: list[pd.Timestamp] = []
     i = latest_usable_index
-    while i >= minimum_history_trading_days and len(candidates) < max_snapshots:
+    while i >= minimum_history_trading_days - 1 and len(candidates) < max_snapshots:
         candidates.append(pd.Timestamp(dates[i]))
         i -= max(int(spacing_trading_days), 1)
     return sorted(candidates)
+
+
+def walk_forward_history_diagnostics(
+    prices: pd.DataFrame,
+    *,
+    settings: WalkForwardConfig,
+    horizons: Iterable[int],
+) -> dict[str, int | str]:
+    """Describe replay dates omitted because full production feature history is absent."""
+    if prices.empty or "date" not in prices.columns:
+        return {
+            "available_trading_days": 0,
+            "required_history_trading_days": int(settings.minimum_history_trading_days),
+            "excluded_replay_dates": int(settings.max_snapshots),
+            "excluded_for_insufficient_history": int(settings.max_snapshots),
+            "excluded_for_insufficient_future": 0,
+            "excluded_security_date_pairs": 0,
+        }
+    dates = pd.Series(pd.to_datetime(prices["date"], errors="coerce").dropna().dt.normalize().unique()).sort_values().tolist()
+    future_sessions = max((int(value) for value in horizons), default=10) + max(
+        (int(value) for value in settings.entry_delay_trading_days), default=0
+    )
+    latest_index = len(dates) - future_sessions - 1
+    insufficient_history = 0
+    insufficient_future = 0
+    scheduled_indices = [latest_index - i * max(int(settings.spacing_trading_days), 1) for i in range(max(int(settings.max_snapshots), 0))]
+    for index in scheduled_indices:
+        if index < 0:
+            insufficient_future += 1
+        elif index + 1 < int(settings.minimum_history_trading_days):
+            insufficient_history += 1
+    replay_dates = _walk_forward_dates(
+        prices,
+        max_snapshots=settings.max_snapshots,
+        spacing_trading_days=settings.spacing_trading_days,
+        minimum_history_trading_days=settings.minimum_history_trading_days,
+        required_future_sessions=future_sessions,
+    )
+    security_date_pairs = 0
+    if replay_dates and {"code", "date"}.issubset(prices.columns):
+        p = prices[["code", "date"]].copy()
+        p["date"] = pd.to_datetime(p["date"], errors="coerce").dt.tz_localize(None).dt.normalize()
+        p = p.dropna(subset=["date"])
+        for replay_date in replay_dates:
+            counts = p.loc[p["date"] <= replay_date].groupby("code", sort=False).size()
+            security_date_pairs += int(counts.lt(settings.minimum_history_trading_days).sum())
+    return {
+        "available_trading_days": len(dates),
+        "required_history_trading_days": int(settings.minimum_history_trading_days),
+        "required_future_trading_days": int(future_sessions),
+        "scheduled_replay_dates": len(scheduled_indices),
+        "usable_replay_dates": len(replay_dates),
+        "excluded_replay_dates": insufficient_history + insufficient_future,
+        "excluded_for_insufficient_history": insufficient_history,
+        "excluded_for_insufficient_future": insufficient_future,
+        "excluded_security_date_pairs": security_date_pairs,
+    }
 
 
 def _price_groups(prices: pd.DataFrame) -> dict[str, pd.DataFrame]:
@@ -374,6 +433,7 @@ def walk_forward_validation(
     price_index = _price_index(prices)
     events: list[dict] = []
     total_dates = len(dates)
+    last_episode_by_code: dict[str, tuple[int, str, str, int]] = {}
     for snapshot_number, as_of in enumerate(dates, start=1):
         if progress is not None:
             progress({
@@ -386,15 +446,23 @@ def walk_forward_validation(
         point_companies, point_prices, point_financials, cohort_audit = _point_in_time_inputs(
             companies, prices, financials, as_of, historical_masters
         )
+        price_counts = point_prices.groupby("code", sort=False)["date"].nunique()
+        eligible_codes = set(price_counts.loc[price_counts >= settings.minimum_history_trading_days].index.astype(str))
+        short_history_codes = set(point_companies["code"].astype(str)) - eligible_codes
+        point_companies = point_companies.loc[point_companies["code"].astype(str).isin(eligible_codes)].copy()
+        point_prices = point_prices.loc[point_prices["code"].astype(str).isin(eligible_codes)].copy()
+        point_financials = point_financials.loc[point_financials["code"].astype(str).isin(eligible_codes)].copy()
+        cohort_audit["excluded_short_price_history_security_count"] = len(short_history_codes)
+        feature_signature = f"{data_signature}:minimum_history={settings.minimum_history_trading_days}"
         prepared = None
         if cache_dir is not None and data_signature:
-            prepared = load_feature_cache(cache_dir, data_signature, as_of)
+            prepared = load_feature_cache(cache_dir, feature_signature, as_of)
         if prepared is None:
             prepared = prepare_quantitative_universe(
                 point_companies, point_prices, point_financials, as_of
             )
             if cache_dir is not None and data_signature:
-                save_feature_cache(cache_dir, data_signature, as_of, prepared)
+                save_feature_cache(cache_dir, feature_signature, as_of, prepared)
         elif progress is not None:
             progress({
                 "stage": "feature_cache",
@@ -425,10 +493,20 @@ def walk_forward_validation(
                 "selection_date": pd.Timestamp(as_of).date().isoformat(),
                 "evaluated_rows": int(len(evaluated)),
                 "selected_rows": int(len(selected)),
+                "excluded_short_price_history_security_count": len(short_history_codes),
                 "fail_reason_counts": dict(fail_reason_counts),
             })
         point_price_groups = _price_groups(point_prices)
-        for _, row in selected.iterrows():
+        for _, row in selected.sort_values("code", kind="stable").iterrows():
+            code = str(row.get("code", ""))
+            prior_episode = last_episode_by_code.get(code)
+            if prior_episode is not None and prior_episode[0] == snapshot_number - 1:
+                episode_id, episode_start, occurrence = prior_episode[1], prior_episode[2], prior_episode[3] + 1
+            else:
+                episode_start = pd.Timestamp(as_of).date().isoformat()
+                episode_id = f"{code}:{episode_start}"
+                occurrence = 1
+            last_episode_by_code[code] = (snapshot_number, episode_id, episode_start, occurrence)
             entry = float(pd.to_numeric(pd.Series([row.get("close")]), errors="coerce").iloc[0])
             controls = matched_controls(evaluated, row, count=settings.controls_per_event)
             readiness, intuitive, transition = _point_in_time_signal(
@@ -437,7 +515,10 @@ def walk_forward_validation(
             trend = transition.get("current", {})
             event = {
                 "selection_date": pd.Timestamp(as_of).date().isoformat(),
-                "code": str(row.get("code", "")),
+                "code": code,
+                "episode_id": episode_id,
+                "episode_start_date": episode_start,
+                "episode_occurrence": occurrence,
                 "name": row.get("name", ""),
                 "sector": row.get("sector", ""),
                 "entry_price": entry,
@@ -497,20 +578,62 @@ def walk_forward_validation(
     return pd.DataFrame(events)
 
 
+def _episode_first_occurrences(events: pd.DataFrame) -> pd.DataFrame:
+    if events.empty:
+        return events.copy()
+    frame = events.copy()
+    if "episode_id" not in frame.columns:
+        frame["episode_id"] = [f"row:{index}" for index in frame.index]
+    sort_columns = [column for column in ("selection_date", "code") if column in frame.columns]
+    if sort_columns:
+        frame = frame.sort_values(sort_columns, kind="stable")
+    return frame.drop_duplicates("episode_id", keep="first")
+
+
+def _bootstrap_selection_edge(edge: pd.Series, *, seed: int = 20261019, samples: int = 2000) -> tuple[float | None, float | None, float | None]:
+    values = pd.to_numeric(edge, errors="coerce").dropna().to_numpy(dtype=float)
+    if len(values) < 2:
+        return None, None, None
+    rng = np.random.default_rng(seed)
+    means = np.empty(samples, dtype=float)
+    batch_size = max(1, min(64, 1_000_000 // len(values)))
+    offset = 0
+    while offset < samples:
+        size = min(batch_size, samples - offset)
+        indices = rng.integers(0, len(values), size=(size, len(values)))
+        means[offset:offset + size] = values[indices].mean(axis=1)
+        offset += size
+    low, high = np.quantile(means, [0.025, 0.975])
+    nonpositive_share = float((means <= 0).mean())
+    return float(low), float(high), nonpositive_share
+
+
 def walk_forward_summary(events: pd.DataFrame, horizons: Iterable[int] = STAR_OUTCOME_HORIZONS) -> pd.DataFrame:
     rows: list[dict] = []
     for horizon in horizons:
-        selected = _numeric(events, f"return_{horizon}d").dropna()
-        control = _numeric(events, f"control_return_{horizon}d").dropna()
-        edge = _numeric(events, f"selection_edge_{horizon}d").dropna()
+        repeated = events.copy()
+        if not repeated.empty and "episode_id" not in repeated.columns:
+            repeated["episode_id"] = [f"row:{index}" for index in repeated.index]
+        episodes = _episode_first_occurrences(repeated)
+        selected_all = _numeric(repeated, f"return_{horizon}d").dropna()
+        selected = _numeric(episodes, f"return_{horizon}d").dropna()
+        control = _numeric(episodes, f"control_return_{horizon}d").dropna()
+        edge = _numeric(episodes, f"selection_edge_{horizon}d").dropna()
+        ci_low, ci_high, nonpositive_share = _bootstrap_selection_edge(edge)
         rows.append(
             {
                 "期間": f"{int(horizon)}取引日",
                 "確定件数": len(selected),
+                "確定エピソード数": len(selected),
+                "延べ確定件数": len(selected_all),
                 "候補平均": float(selected.mean()) if len(selected) else None,
                 "候補プラス率": float((selected > 0).mean()) if len(selected) else None,
                 "類似非選択平均": float(control.mean()) if len(control) else None,
                 "選択効果": float(edge.mean()) if len(edge) else None,
+                "選択効果95%区間下限": ci_low,
+                "選択効果95%区間上限": ci_high,
+                "再標本化時に選択効果が0以下となる割合": nonpositive_share,
+                "信頼区間が0を含む": bool(ci_low is None or ci_low <= 0 <= ci_high),
                 "選択効果プラス率": float((edge > 0).mean()) if len(edge) else None,
             }
         )
@@ -596,17 +719,26 @@ def walk_forward_cohort_summary(events: pd.DataFrame, *, horizon_days: int = 30)
     """Compare nested selection stages with robust outcome statistics."""
     if events.empty:
         return pd.DataFrame()
+    episode_events = _episode_first_occurrences(events)
     cohorts = [
-        ("定量候補全体", pd.Series(True, index=events.index)),
-        ("旧◎☆条件", events.get("legacy_star_eligible", pd.Series(False, index=events.index)).fillna(False).astype(bool)),
-        ("反転確認済み◎☆", events.get("reversal_star_eligible", pd.Series(False, index=events.index)).fillna(False).astype(bool)),
+        ("定量候補全体", pd.Series(True, index=episode_events.index)),
+        ("旧◎☆条件", episode_events.get("legacy_star_eligible", pd.Series(False, index=episode_events.index)).fillna(False).astype(bool)),
+        ("反転確認済み◎☆", episode_events.get("reversal_star_eligible", pd.Series(False, index=episode_events.index)).fillna(False).astype(bool)),
     ]
     rows: list[dict] = []
     for label, mask in cohorts:
-        values = _numeric(events.loc[mask], f"return_{int(horizon_days)}d").dropna()
+        values = _numeric(episode_events.loc[mask], f"return_{int(horizon_days)}d").dropna()
+        repeated_mask = pd.Series(True, index=events.index)
+        if label == "旧◎☆条件":
+            repeated_mask = events.get("legacy_star_eligible", pd.Series(False, index=events.index)).fillna(False).astype(bool)
+        elif label == "反転確認済み◎☆":
+            repeated_mask = events.get("reversal_star_eligible", pd.Series(False, index=events.index)).fillna(False).astype(bool)
+        repeated_confirmed = int(_numeric(events.loc[repeated_mask], f"return_{int(horizon_days)}d").notna().sum())
         rows.append({
             "判定段階": label,
             "該当件数": int(mask.sum()),
+            "確定エピソード数": len(values),
+            "延べ確定件数": repeated_confirmed,
             "確定件数": len(values),
             "平均リターン": float(values.mean()) if len(values) else None,
             "中央値": float(values.median()) if len(values) else None,
@@ -623,6 +755,7 @@ def walk_forward_entry_timing_summary(
     if events.empty:
         return pd.DataFrame()
     frame = events
+    frame = _episode_first_occurrences(frame)
     if reversal_only:
         mask = events.get("reversal_star_eligible", pd.Series(False, index=events.index)).fillna(False).astype(bool)
         frame = events.loc[mask]
@@ -646,7 +779,7 @@ def walk_forward_entry_timing_summary(
 def attribution_outcome_summary(events: pd.DataFrame, *, horizon_days: int = 30) -> pd.DataFrame:
     if events.empty or "external_shock_attribution_score" not in events.columns:
         return pd.DataFrame()
-    frame = events.copy()
+    frame = _episode_first_occurrences(events.copy())
     score = _numeric(frame, "external_shock_attribution_score")
     returns = _numeric(frame, f"return_{int(horizon_days)}d")
     frame = frame.loc[score.notna() & returns.notna()].copy()

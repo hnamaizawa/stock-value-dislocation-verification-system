@@ -25,10 +25,11 @@ def test_actual_data_enables_guarded_learning_but_demo_does_not():
     real = yaml.safe_load((ROOT / "config" / "real_data.yaml").read_text(encoding="utf-8"))
     demo = yaml.safe_load((ROOT / "config" / "default.yaml").read_text(encoding="utf-8"))
     assert real["rule_learning"]["enabled"] is True
-    assert real["rule_learning"]["auto_apply"] is True
+    assert real["rule_learning"]["auto_apply"] is False
     assert demo["rule_learning"]["enabled"] is False
     assert demo["rule_learning"]["auto_apply"] is False
-    assert int(real["rule_learning"]["minimum_mature_events"]) >= 40
+    assert int(real["rule_learning"]["minimum_mature_events"]) >= 100
+    assert int(real["rule_learning"]["final_holdout_trading_days"]) >= 1
     assert int(real["rule_learning"]["minimum_validation_events"]) >= 10
     assert float(real["rule_learning"]["minimum_mean_return_improvement"]) >= 0.02
     assert int(real["rule_learning"]["cooldown_days"]) >= 30

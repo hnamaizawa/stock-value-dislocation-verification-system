@@ -152,6 +152,11 @@ def _history_signature(project_root: Path, prices_path: Path, config: dict[str, 
     screen = config.get("screen", {})
     baseline = {spec.config_key: screen.get(spec.config_key) for spec in RULE_SPECS}
     digest.update(json.dumps(baseline, sort_keys=True, default=str).encode())
+    learning = config.get("rule_learning", {})
+    digest.update(json.dumps({
+        key: learning.get(key)
+        for key in ("primary_horizon_days", "minimum_mature_events", "minimum_event_gap_days", "final_holdout_trading_days")
+    }, sort_keys=True, default=str).encode())
     return digest.hexdigest()
 
 
@@ -234,6 +239,10 @@ def _attach_forward_returns(analysis: pd.DataFrame, prices: pd.DataFrame) -> pd.
             if valid.any():
                 values[valid] = closes[pos[valid]] / entry[valid] - 1.0
             g[f"return_{horizon}d"] = values
+            outcome_dates = np.full(len(g), np.datetime64("NaT"), dtype="datetime64[ns]")
+            if valid.any():
+                outcome_dates[valid] = dates[pos[valid]]
+            g[f"outcome_date_{horizon}d"] = pd.to_datetime(outcome_dates)
         result_parts.append(g)
     return pd.concat(result_parts, ignore_index=True, sort=False) if result_parts else pd.DataFrame()
 
@@ -429,7 +438,7 @@ def refresh_rule_learning_state(
         "updated_at": _now_iso(),
         "source_signature": signature,
         "status": "evaluated",
-        "auto_apply": bool(settings.get("auto_apply", True)),
+        "auto_apply": bool(settings.get("auto_apply", False)),
         "active_screen_overrides": active,
         "primary_horizon_days": int(settings.get("primary_horizon_days", 90)),
     }
@@ -450,9 +459,27 @@ def refresh_rule_learning_state(
         int(settings.get("minimum_event_gap_days", 30)),
     )
     primary = int(settings.get("primary_horizon_days", 90))
-    mature = enriched.loc[pd.to_numeric(enriched.get(f"return_{primary}d"), errors="coerce").notna()].copy() if not enriched.empty else pd.DataFrame()
+    mature_all = enriched.loc[pd.to_numeric(enriched.get(f"return_{primary}d"), errors="coerce").notna()].copy() if not enriched.empty else pd.DataFrame()
+    holdout_days = max(0, int(settings.get("final_holdout_trading_days", 60)))
+    sessions = (
+        pd.to_datetime(prices.get("date"), errors="coerce").dropna().dt.tz_localize(None).dt.normalize().drop_duplicates().sort_values()
+        if not prices.empty and "date" in prices.columns else pd.Series(dtype="datetime64[ns]")
+    )
+    holdout_start = sessions.iloc[-holdout_days] if holdout_days and len(sessions) >= holdout_days else (
+        sessions.iloc[0] if holdout_days and len(sessions) else pd.NaT
+    )
+    if holdout_days and not mature_all.empty:
+        outcome_date = pd.to_datetime(mature_all.get(f"outcome_date_{primary}d"), errors="coerce").dt.tz_localize(None).dt.normalize()
+        mature = mature_all.loc[outcome_date.notna() & (outcome_date < holdout_start)].copy() if pd.notna(holdout_start) else mature_all.iloc[0:0].copy()
+    else:
+        mature = mature_all.copy()
     state["mature_event_count"] = int(len(mature))
-    minimum_total = int(settings.get("minimum_mature_events", 40))
+    state["mature_event_count_before_final_holdout"] = int(len(mature_all))
+    state["final_holdout_trading_days"] = holdout_days
+    state["final_holdout_start"] = holdout_start.date().isoformat() if pd.notna(holdout_start) else ""
+    state["final_holdout_excluded_event_count"] = int(len(mature_all) - len(mature))
+    minimum_total = int(settings.get("minimum_mature_events", 100))
+    state["required_mature_events"] = minimum_total
     if len(mature) < minimum_total:
         state["status"] = "insufficient_history"
         state["required_mature_events"] = minimum_total
@@ -484,7 +511,7 @@ def refresh_rule_learning_state(
     best = max(accepted, key=lambda item: float(item.get("score", float("-inf"))))
     state["best_proposal"] = best
     state["status"] = "proposal_ready"
-    if bool(settings.get("auto_apply", True)):
+    if bool(settings.get("auto_apply", False)):
         new_active = dict(active)
         new_active[str(best["rule"])] = best["candidate"]
         payload = {
