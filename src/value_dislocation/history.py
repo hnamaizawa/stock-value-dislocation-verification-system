@@ -12,7 +12,7 @@ ANALYSIS_HISTORY_COLUMNS = [
     "analysis_date", "data_as_of", "run_id", "score_scale", "code", "name", "market", "sector", "selection_strategy",
     "selected_for_review", "strategy_score", "quantitative_score", "daytrade_activity_score",
     "close", "drawdown_52w", "relative_return_6m", "sector_relative_return_6m",
-    "external_shock_attribution", "external_shock_attribution_score", "company_specific_component_6m",
+    "external_shock_attribution", "external_shock_attribution_score", "external_shock_attribution_method", "company_specific_component_6m",
     "sales_cagr_3y", "operating_margin", "operating_margin_change_3y",
     "operating_cf_positive_ratio_3y", "cash_conversion_ratio", "equity_ratio",
     "forecast_op_growth", "forecast_revision_rate",
@@ -200,6 +200,13 @@ def load_analysis_history(project_root: Path, *, start: date | None = None, end:
         return pd.DataFrame()
     out = pd.concat(frames, ignore_index=True, sort=False)
     out = normalize_analysis_history_score_scale(out)
+    if "external_shock_attribution_method" not in out.columns:
+        out["external_shock_attribution_method"] = ""
+    missing_method = out["external_shock_attribution_method"].fillna("").astype(str).eq("")
+    has_old_attribution = pd.to_numeric(
+        out.get("external_shock_attribution", pd.Series(pd.NA, index=out.index)), errors="coerce"
+    ).notna()
+    out.loc[missing_method & has_old_attribution, "external_shock_attribution_method"] = "v1_legacy"
     if selected_only and "selected_for_review" in out.columns:
         out = out.loc[_coerce_bool_series(out["selected_for_review"])].copy()
     return out

@@ -40,7 +40,7 @@ def test_analysis_result_help_explains_plain_meaning_and_limits():
         '"プラス率": "対象の記録のうち、株価が上がった割合です。',
         '"確定件数": "選んだ日数分の株価データがそろい、成績を計算できた記録数です。',
         '"選択効果": "選ばれた銘柄と、条件が似ていた非候補の成績の差です。',
-        '"external_shock_ratio": "株価の下落のうち、市場全体や同じ業種の値動きと重なっていた割合',
+        '"external_shock_ratio": "既定方式では、株価の下落のうち業種全体の下落分で説明できる割合',
         '"minimum_volatility_60d": "直近60営業日の終値の動きから、値動きの大きさを年換算した目安です。',
     ]
     assert not [item for item in required if item not in source]

@@ -1,6 +1,6 @@
 schema_version: '1.0'
 blueprint_name: japanese-equity-value-dislocation-research
-blueprint_version: 0.6.75
+blueprint_version: 0.6.80
 canonical_project: stock-value-dislocation-verification-system
 purpose: Generate a local-first Japanese equity research application that finds
   potentially sound Japanese companies depressed by external factors, tracks possible
@@ -110,6 +110,7 @@ non_negotiable_invariants:
 - walk_forward_selection_must_not_use_future_prices
 - matched_controls_must_exclude_selected_securities
 - external_shock_attribution_must_not_replace_human_event_review
+- external_attribution_v2_must_use_absolute_sector_decline
 - walk_forward_validation_must_not_trigger_market_data_fetch
 - walk_forward_horizons_must_use_trading_sessions
 - walk_forward_must_report_survivorship_coverage

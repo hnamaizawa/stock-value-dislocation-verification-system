@@ -35,6 +35,7 @@ screen:
   minimum_relative_underperformance_6m: -0.08
   minimum_external_shock_attribution: 0.0
   external_shock_attribution_when_missing: skip_with_warning
+  external_shock_attribution_method: v2_sector_absolute
 
 # Demo/sample config never auto-learns. Actual-data config enables the guarded learner.
 rule_learning:

@@ -148,6 +148,7 @@ def _prepared_attribution_rows() -> pd.DataFrame:
         "operating_margin": [0.1] * 3, "drawdown_52w": [-0.3] * 3,
         "return_6m": [-0.2, -0.2, 0.05],
         "sector_return_6m_median": [-0.18, -0.10, -0.05],
+        "sector_peer_count_6m": [5, 5, 5],
         "topix_return_6m": [-0.1, -0.1, np.nan],
         "topix_relative_return_6m": [-0.1, -0.05, np.nan],
         "topix_available": [True, True, False],
@@ -235,27 +236,28 @@ def test_attribution_missing_reasons_and_cohort_rates_are_reported_separately():
         "code": ["A", "B", "C", "D", "E"],
         "return_6m": [-0.10, -0.10, 0.05, np.nan, -0.10],
         "sector_return_6m_median": [-0.11, np.nan, np.nan, -0.20, -0.11],
+        "sector_peer_count_6m": [5, 5, 5, 5, 5],
         "benchmark_return_6m": [-0.08, -0.08, np.nan, -0.08, np.nan],
         "pass_other_quality": [True, True, True, False, True],
         "pass_external_shock_attribution": [True, True, True, True, True],
     }))
     assert evaluated["external_shock_attribution_unavailable_reason"].tolist() == [
-        "", "業種データ不足", "6か月騰落が0以上", "比較データ不足", "比較データ不足",
+        "", "業種データ不足", "6か月騰落が0以上", "比較データ不足", "",
     ]
 
     summary = external_attribution_missing_diagnostics(evaluated).set_index("対象")
     all_stocks = summary.loc["全銘柄"]
     other_passed = summary.loc["外因以外の条件を通過"]
     assert all_stocks["対象銘柄数"] == 5
-    assert all_stocks["計算不能件数"] == 4
-    assert all_stocks["計算不能割合"] == "80.0%"
+    assert all_stocks["計算不能件数"] == 3
+    assert all_stocks["計算不能割合"] == "60.0%"
     assert all_stocks["6か月騰落が0以上件数"] == 1
-    assert all_stocks["比較データ不足件数"] == 2
+    assert all_stocks["比較データ不足件数"] == 1
     assert all_stocks["業種データ不足件数"] == 1
     assert other_passed["対象銘柄数"] == 4
-    assert other_passed["計算不能件数"] == 3
-    assert other_passed["計算不能割合"] == "75.0%"
-    assert other_passed["比較データ不足件数"] == 1
+    assert other_passed["計算不能件数"] == 2
+    assert other_passed["計算不能割合"] == "50.0%"
+    assert other_passed["比較データ不足件数"] == 0
 
 
 def test_attribution_funnel_separates_low_ratio_and_missing_rejections():
@@ -289,9 +291,12 @@ def test_screen_comparison_reuses_prepared_rows_without_fetching(monkeypatch):
     assert "fetch_yahoo_finance_history" not in criteria.__dict__
     assert "fetch_yahoo_finance_quote" not in criteria.__dict__
     comparison = external_attribution_screen_comparison(_prepared_attribution_rows(), _config())
-    assert len(comparison) == 8
-    no_attribution = comparison.loc[comparison["外因説明率下限"].eq("なし")].set_index("TOPIX比 -8%以下")
-    assert no_attribution.loc["なし", "定量候補数"] > no_attribution.loc["あり", "定量候補数"]
+    assert len(comparison) == 16
+    assert set(comparison["計算方式"]) == {"新方式（業種全体）", "旧方式"}
+    no_attribution = comparison.loc[comparison["外因説明率下限"].eq("なし")]
+    for _, method_rows in no_attribution.groupby("計算方式"):
+        by_relative_filter = method_rows.set_index("TOPIX比 -8%以下")
+        assert by_relative_filter.loc["なし", "定量候補数"] > by_relative_filter.loc["あり", "定量候補数"]
 
 
 def test_etf_proxy_is_used_when_official_topix_is_missing():
