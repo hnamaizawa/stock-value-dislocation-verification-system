@@ -6,6 +6,7 @@ import pandas as pd
 from value_dislocation import validation
 from value_dislocation.strategy.attribution import add_external_shock_attribution
 from value_dislocation.strategy.criteria import copy_with_screen_overrides
+from value_dislocation.strategy.features import price_features
 from value_dislocation.validation import (
     WalkForwardConfig,
     _forward_return,
@@ -13,9 +14,95 @@ from value_dislocation.validation import (
     supported_walk_forward_horizons,
     walk_forward_cohort_summary,
     walk_forward_entry_timing_summary,
+    walk_forward_external_attribution_comparison,
     walk_forward_summary,
     walk_forward_validation,
 )
+
+
+def test_walk_forward_attribution_uses_only_prices_available_on_replay_date():
+    dates = pd.bdate_range("2025-01-06", periods=40)
+    rows = []
+    close_series = {
+        "A": [100.0] * 34 + [80.0] + [10.0] * 5,
+        "B": [100.0] * 34 + [85.0] + [10.0] * 5,
+    }
+    topix_series = [1000.0] * 34 + [900.0] + [1500.0] * 5
+    for code, closes in close_series.items():
+        for i, date in enumerate(dates):
+            close = closes[i]
+            topix = topix_series[i]
+            rows.append({
+                "code": code, "date": date, "close": close,
+                "high": max(close, 100.0), "low": close * 0.99,
+                "volume": 10_000, "topix_close": topix,
+            })
+    prices = pd.DataFrame(rows)
+    as_of = dates[34]
+    companies = pd.DataFrame([
+        {"code": "A", "name": "A", "sector": "Tech", "market": "Prime"},
+        {"code": "B", "name": "B", "sector": "Tech", "market": "Prime"},
+    ])
+    financials = pd.DataFrame([
+        {"code": code, "disclosure_date": dates[0]} for code in ("A", "B")
+    ])
+
+    point_companies, point_prices, _, _ = validation._point_in_time_inputs(
+        companies, prices, financials, as_of
+    )
+    assert set(point_companies["code"]) == {"A", "B"}
+    assert point_prices["date"].max().normalize() == as_of.normalize()
+
+    features = price_features(point_prices, as_of).set_index("code")
+    sector_median = features["return_6m"].median()
+    features["sector_return_6m_median"] = sector_median
+    features["benchmark_source"] = "official_topix"
+    features["benchmark_return_6m"] = features["topix_return_6m"]
+    past_attribution = add_external_shock_attribution(features.reset_index()).set_index("code")
+    assert np.isclose(past_attribution.loc["A", "external_shock_attribution"], 0.875)
+
+    # Changing all post-selection prices cannot change the point-in-time result.
+    altered = prices.copy()
+    future = altered["date"] > as_of
+    altered.loc[future, "close"] = 1_000_000.0
+    altered.loc[future, "topix_close"] = 1.0
+    _, altered_point_prices, _, _ = validation._point_in_time_inputs(
+        companies, altered, financials, as_of
+    )
+    altered_features = price_features(altered_point_prices, as_of).set_index("code")
+    altered_features["sector_return_6m_median"] = altered_features["return_6m"].median()
+    altered_features["benchmark_source"] = "official_topix"
+    altered_features["benchmark_return_6m"] = altered_features["topix_return_6m"]
+    altered_attribution = add_external_shock_attribution(altered_features.reset_index()).set_index("code")
+    assert np.isclose(
+        altered_attribution.loc["A", "external_shock_attribution"],
+        past_attribution.loc["A", "external_shock_attribution"],
+    )
+
+
+def test_walk_forward_comparison_runs_eight_screen_variants(monkeypatch):
+    seen = []
+
+    def fake_walk_forward(companies, prices, financials, config, **kwargs):
+        screen = config["screen"]
+        seen.append((screen["minimum_external_shock_attribution"], screen["use_relative_underperformance_filter"], screen["minimum_relative_underperformance_6m"]))
+        count = int(screen["minimum_external_shock_attribution"] * 10) + int(screen["use_relative_underperformance_filter"])
+        return pd.DataFrame([{
+            "return_10d": 0.10,
+            "control_return_10d": 0.02,
+            "selection_edge_10d": 0.08,
+        }] * count)
+
+    monkeypatch.setattr(validation, "walk_forward_validation", fake_walk_forward)
+    result = walk_forward_external_attribution_comparison(
+        pd.DataFrame(), pd.DataFrame(), pd.DataFrame(),
+        {"universe": {}, "screen": {"minimum_relative_underperformance_6m": -0.12}},
+        settings=WalkForwardConfig(), horizons=(10,),
+    )
+    assert len(result) == 8
+    assert len(seen) == 8
+    assert {variant[2] for variant in seen} == {-0.08}
+    assert result["選択効果"].dropna().eq(0.08).all()
 
 
 def test_external_shock_attribution_decomposes_decline():

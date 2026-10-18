@@ -33,6 +33,8 @@ screen:
   maximum_forecast_op_decline: -0.20
   minimum_drawdown_52w: -0.18
   minimum_relative_underperformance_6m: -0.08
+  minimum_external_shock_attribution: 0.0
+  external_shock_attribution_when_missing: skip_with_warning
 
 # Demo/sample config never auto-learns. Actual-data config enables the guarded learner.
 rule_learning:

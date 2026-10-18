@@ -6,7 +6,9 @@ import numpy as np
 import pandas as pd
 
 from value_dislocation.strategy.criteria import (
+    apply_quantitative_criteria,
     build_quantitative_table,
+    external_attribution_screen_comparison,
     screening_funnel,
 )
 from value_dislocation.strategy.features import price_features
@@ -130,8 +132,114 @@ def test_funnel_is_monotonic():
     table = build_quantitative_table(
         _companies(), prices, _financials(), prices["date"].max(), _config()
     )
-    counts = [int(item["count"]) for item in screening_funnel(table)]
+    counts = [int(item["count"]) for item in screening_funnel(table) if not item.get("diagnostic")]
     assert counts == sorted(counts, reverse=True)
+
+
+def _prepared_attribution_rows() -> pd.DataFrame:
+    return pd.DataFrame({
+        "code": ["A", "B", "C"], "name": ["A", "B", "C"],
+        "market": ["Prime"] * 3, "sector": ["Tech"] * 3,
+        "average_turnover_yen_20d": [5_000_000] * 3, "close": [500.0] * 3,
+        "equity_ratio": [0.5] * 3, "operating_profit_latest": [100.0] * 3,
+        "operating_cf_positive_ratio_3y": [1.0] * 3, "sales_cagr_3y": [0.1] * 3,
+        "operating_margin": [0.1] * 3, "drawdown_52w": [-0.3] * 3,
+        "return_6m": [-0.2, -0.2, 0.05],
+        "sector_return_6m_median": [-0.18, -0.10, -0.05],
+        "topix_return_6m": [-0.1, -0.1, np.nan],
+        "topix_relative_return_6m": [-0.1, -0.05, np.nan],
+        "topix_available": [True, True, False],
+        "benchmark_source": ["official_topix", "official_topix", "none"],
+        "forecast_op_growth": [0.1] * 3, "quantitative_score": [80.0] * 3,
+        "cash_conversion_ratio": [1.0] * 3, "operating_margin_change_3y": [0.0] * 3,
+        "forecast_revision_rate": [0.0] * 3, "sector_relative_return_6m": [0.0] * 3,
+        "forecast_dividend_yield": [0.0] * 3, "forecast_annual_dividend_per_share": [0.0] * 3,
+        "payout_ratio": [0.0] * 3, "forecast_dividend_change_rate": [0.0] * 3,
+    })
+
+
+def test_zero_external_attribution_threshold_preserves_pre_b_candidates():
+    prepared = _prepared_attribution_rows()
+    config = _config()
+    config["screen"].update({
+        "minimum_equity_ratio": 0.0,
+        "minimum_operating_cf_positive_ratio_3y": 0.0,
+        "minimum_sales_cagr_3y": -1.0,
+        "minimum_operating_margin": -1.0,
+        "minimum_drawdown_52w": 0.0,
+        "use_relative_underperformance_filter": False,
+        "minimum_sector_relative_return_6m": -1.0,
+    })
+    before = apply_quantitative_criteria(prepared, config)
+    explicit_zero = deepcopy(config)
+    explicit_zero["screen"]["minimum_external_shock_attribution"] = 0.0
+    after = apply_quantitative_criteria(prepared, explicit_zero)
+    assert before.loc[before["selected_for_review"], "code"].tolist() == after.loc[after["selected_for_review"], "code"].tolist()
+
+
+def test_external_attribution_below_threshold_is_filtered():
+    prepared = _prepared_attribution_rows()
+    config = _config()
+    config["screen"].update({
+        "minimum_equity_ratio": 0.0,
+        "minimum_operating_cf_positive_ratio_3y": 0.0,
+        "minimum_sales_cagr_3y": -1.0,
+        "minimum_operating_margin": -1.0,
+        "minimum_drawdown_52w": 0.0,
+        "use_relative_underperformance_filter": False,
+        "minimum_sector_relative_return_6m": -1.0,
+        "minimum_external_shock_attribution": 0.7,
+    })
+    evaluated = apply_quantitative_criteria(prepared, config).set_index("code")
+    assert evaluated.loc["A", "external_shock_attribution"] >= 0.7
+    assert evaluated.loc["B", "external_shock_attribution"] < 0.7
+    assert bool(evaluated.loc["A", "selected_for_review"])
+    assert not bool(evaluated.loc["B", "selected_for_review"])
+
+
+def test_missing_attribution_policy_skip_warns_or_fails():
+    prepared = _prepared_attribution_rows()
+    common = {
+        "minimum_equity_ratio": 0.0,
+        "minimum_operating_cf_positive_ratio_3y": 0.0,
+        "minimum_sales_cagr_3y": -1.0,
+        "minimum_operating_margin": -1.0,
+        "minimum_drawdown_52w": 0.0,
+        "use_relative_underperformance_filter": False,
+        "minimum_sector_relative_return_6m": -1.0,
+        "minimum_external_shock_attribution": 0.5,
+    }
+    skip_config = _config()
+    skip_config["screen"].update(common | {"external_shock_attribution_when_missing": "skip_with_warning"})
+    fail_config = _config()
+    fail_config["screen"].update(common | {"external_shock_attribution_when_missing": "fail"})
+    skip = apply_quantitative_criteria(prepared, skip_config).set_index("code")
+    fail = apply_quantitative_criteria(prepared, fail_config).set_index("code")
+    assert bool(skip.loc["C", "pass_external_shock_attribution"])
+    assert bool(skip.loc["C", "external_shock_attribution_skipped"])
+    assert "計算できない" in skip.loc["C", "warning_reasons"]
+    assert not bool(fail.loc["C", "pass_external_shock_attribution"])
+    assert not bool(fail.loc["C", "selected_for_review"])
+    skip_funnel = {row["stage"]: row["count"] for row in screening_funnel(skip.reset_index())}
+    fail_funnel = {row["stage"]: row["count"] for row in screening_funnel(fail.reset_index())}
+    assert skip_funnel["計算できずに通した件数"] == 1
+    assert fail_funnel["外因説明率で外れた件数"] == 1
+
+
+def test_screen_comparison_reuses_prepared_rows_without_fetching(monkeypatch):
+    import value_dislocation.strategy.criteria as criteria
+
+    def forbidden(*args, **kwargs):
+        raise AssertionError("comparison must not rebuild or fetch data")
+
+    monkeypatch.setattr(criteria, "prepare_quantitative_universe", forbidden)
+    assert "create_client" not in criteria.__dict__
+    assert "fetch_yahoo_finance_history" not in criteria.__dict__
+    assert "fetch_yahoo_finance_quote" not in criteria.__dict__
+    comparison = external_attribution_screen_comparison(_prepared_attribution_rows(), _config())
+    assert len(comparison) == 8
+    no_attribution = comparison.loc[comparison["外因説明率下限"].eq("なし")].set_index("TOPIX比 -8%以下")
+    assert no_attribution.loc["なし", "定量候補数"] > no_attribution.loc["あり", "定量候補数"]
 
 
 def test_etf_proxy_is_used_when_official_topix_is_missing():
