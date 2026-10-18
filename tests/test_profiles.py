@@ -45,6 +45,7 @@ def test_legacy_profile_without_score_scale_converts_once_without_rewriting_file
     path.write_bytes(original)
     loaded = load_profile(path)
     assert loaded["overrides"]["screen"]["quantitative_min_score"] == 70
+    assert loaded["overrides"]["screen"]["external_shock_attribution_method"] == "v2_sector_absolute"
     assert loaded["score_scale"]
     assert load_profile(path)["overrides"]["screen"]["quantitative_min_score"] == 70
     assert path.read_bytes() == original

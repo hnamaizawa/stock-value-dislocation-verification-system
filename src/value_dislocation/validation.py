@@ -67,10 +67,10 @@ def _selected_benchmark_return(frame: pd.DataFrame) -> pd.Series:
     return values
 
 
-def with_attribution(frame: pd.DataFrame) -> pd.DataFrame:
+def with_attribution(frame: pd.DataFrame, method: str = "v2_sector_absolute") -> pd.DataFrame:
     out = frame.copy()
     out["benchmark_return_6m"] = _selected_benchmark_return(out)
-    return add_external_shock_attribution(out)
+    return add_external_shock_attribution(out, method=method)
 
 
 def _walk_forward_dates(
@@ -404,7 +404,10 @@ def walk_forward_validation(
                 "message": "保存済みの過去特徴量を再利用しています",
             })
         evaluated = apply_quantitative_criteria(prepared, config)
-        evaluated = with_attribution(evaluated)
+        evaluated = with_attribution(
+            evaluated,
+            str(config.get("screen", {}).get("external_shock_attribution_method", "v2_sector_absolute")),
+        )
         selected_mask = evaluated.get(
             "selected_for_review", pd.Series(False, index=evaluated.index, dtype=bool)
         ).fillna(False).astype(bool)
@@ -441,6 +444,7 @@ def walk_forward_validation(
                 "quantitative_score": row.get("quantitative_score"),
                 "external_shock_attribution": row.get("external_shock_attribution"),
                 "external_shock_attribution_score": row.get("external_shock_attribution_score"),
+                "external_shock_attribution_method": row.get("external_shock_attribution_method", "v2_sector_absolute"),
                 "company_specific_component_6m": row.get("company_specific_component_6m"),
                 "control_codes": ",".join(controls.get("code", pd.Series(dtype=str)).astype(str).tolist()),
                 "control_count": len(controls),
@@ -534,7 +538,12 @@ def walk_forward_external_attribution_comparison(
     """
     comparison_rows: list[dict] = []
     horizons = tuple(int(value) for value in horizons)
-    variants = [(minimum, enabled) for minimum in (0.0, 0.3, 0.5, 0.7) for enabled in (True, False)]
+    variants = [
+        (method, minimum, enabled)
+        for method in ("v2_sector_absolute", "v1_legacy")
+        for minimum in (0.0, 0.3, 0.5, 0.7)
+        for enabled in (True, False)
+    ]
     replay_dates = _walk_forward_dates(
         prices,
         max_snapshots=settings.max_snapshots,
@@ -547,10 +556,11 @@ def walk_forward_external_attribution_comparison(
         f"{pd.Timestamp(replay_dates[0]).date()}～{pd.Timestamp(replay_dates[-1]).date()}"
         if replay_dates else "検証可能な過去時点なし"
     )
-    for variant_number, (minimum, relative_enabled) in enumerate(variants, start=1):
+    for variant_number, (method, minimum, relative_enabled) in enumerate(variants, start=1):
         variant_config = deepcopy(config)
         variant_config.setdefault("screen", {}).update({
             "minimum_external_shock_attribution": minimum,
+            "external_shock_attribution_method": method,
             "external_shock_attribution_when_missing": "skip_with_warning",
             "use_relative_underperformance_filter": relative_enabled,
             "minimum_relative_underperformance_6m": -0.08,
@@ -573,6 +583,7 @@ def walk_forward_external_attribution_comparison(
         for _, result in summary.iterrows():
             comparison_rows.append({
                 "再現期間": replay_period,
+                "計算方式": "新方式（業種全体）" if method == "v2_sector_absolute" else "旧方式",
                 "外因説明率下限": f"{minimum:.0%}" if minimum else "なし",
                 "TOPIX比 -8%以下": "あり" if relative_enabled else "なし",
                 "候補イベント数": int(len(events)),

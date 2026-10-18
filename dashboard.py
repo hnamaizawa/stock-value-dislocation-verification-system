@@ -428,8 +428,8 @@ ANALYSIS_ITEM_HELP = {
     "selected_return": "過去に候補として選ばれた銘柄の、その後の平均的な株価変化です。",
     "control_return": "候補には選ばれなかったものの、似た条件だった銘柄の、その後の平均的な株価変化です。",
     "selection_effect": "候補と、条件が似ていた非候補との成績の差です。プラスなら候補の方が上でした。ただし、選び方が差を生んだと証明するものではありません。",
-    "external_shock_ratio": "株価の下落のうち、市場全体や同じ業種の値動きと重なっていた割合の目安です。外的要因が原因だと証明する数字ではありません。",
-    "外因説明率": "株価の下落のうち、市場全体や同じ業種の値動きと重なっていた割合の目安です。外的要因が原因だと証明する数字ではありません。",
+    "external_shock_ratio": "既定方式では、株価の下落のうち業種全体の下落分で説明できる割合の目安です。市場の動きは重ねて足しません。外的要因が原因だと証明する数字ではありません。",
+    "外因説明率": "既定方式では、株価の下落のうち業種全体の下落分で説明できる割合の目安です。市場の動きは重ねて足しません。外的要因が原因だと証明する数字ではありません。",
     "master_coverage_ratio": "過去に上場していた銘柄のうち、保存済みの会社一覧で確認できた割合です。",
     "survivorship_bias_warning": "現在は上場していない会社など、保存した過去の会社一覧から漏れた銘柄があるかもしれないという注意です。",
     "候補イベント": "過去の各日に候補条件を満たした記録の合計です。同じ銘柄でも日が違えば別々に数えます。",
@@ -1682,6 +1682,7 @@ def _apply_values(overrides: dict) -> None:
     st.session_state["ui_relative_pct"] = int(round(-s["minimum_relative_underperformance_6m"] * 100))
     st.session_state["ui_external_attribution_pct"] = float(s.get("minimum_external_shock_attribution", 0.0)) * 100
     st.session_state["ui_attribution_missing_policy"] = str(s.get("external_shock_attribution_when_missing", "skip_with_warning"))
+    st.session_state["ui_attribution_method"] = str(s.get("external_shock_attribution_method", "v2_sector_absolute"))
     st.session_state["ui_require_forecast"] = bool(s.get("require_forecast", False))
     st.session_state["ui_require_sales_history"] = bool(s.get("require_sales_history", False))
     st.session_state["ui_min_score"] = int(round(s["quantitative_min_score"]))
@@ -1733,6 +1734,7 @@ def _initialize_condition_state() -> None:
     st.session_state.setdefault("ui_max_sector_underperformance_pct", 15.0)
     st.session_state.setdefault("ui_external_attribution_pct", 0.0)
     st.session_state.setdefault("ui_attribution_missing_policy", "skip_with_warning")
+    st.session_state.setdefault("ui_attribution_method", "v2_sector_absolute")
 
 
 def _current_overrides() -> dict:
@@ -1760,6 +1762,7 @@ def _current_overrides() -> dict:
             "relative_filter_when_topix_missing": "skip_with_warning",
             "minimum_external_shock_attribution": float(st.session_state.get("ui_external_attribution_pct", 0.0)) / 100,
             "external_shock_attribution_when_missing": str(st.session_state.get("ui_attribution_missing_policy", "skip_with_warning")),
+            "external_shock_attribution_method": str(st.session_state.get("ui_attribution_method", "v2_sector_absolute")),
             "require_forecast": bool(st.session_state["ui_require_forecast"]),
             "require_sales_history": bool(st.session_state["ui_require_sales_history"]),
             "quantitative_min_score": int(st.session_state["ui_min_score"]),
@@ -1944,14 +1947,14 @@ def render_condition_builder() -> None:
                 step=1,
                 disabled=active_mode or (not use_relative) or benchmark_mode == "disabled",
             )
-        attribution1, attribution2 = st.columns(2)
+        attribution1, attribution2, attribution3 = st.columns(3)
         with attribution1:
             attribution_pct = st.slider(
                 "外因説明率の下限（%）", 0, 100,
                 value=int(round(float(st.session_state.get("ui_external_attribution_pct", 0.0)))),
                 step=5,
                 disabled=active_mode,
-                help="株価の下落のうち、市場全体や同じ業種の値下がりで説明できる割合の下限です。0%ならこの条件は使いません。計算できない銘柄は右の設定に従います。数字は原因を証明するものではありません。",
+                help="新方式では、株価の下落のうち業種全体の値下がりで説明できる割合を使います。0%ならこの条件は使いません。計算できない銘柄は右の設定に従います。この数字は原因を証明するものではありません。",
             )
         with attribution2:
             missing_policy_options = {
@@ -1968,6 +1971,21 @@ def render_condition_builder() -> None:
                 help="6か月騰落が0%以上、または市場・業種の比較データが足りない場合に使います。「通して警告」は候補に残して確認事項を表示し、「候補から外す」は候補にしません。",
             )
             attribution_missing_policy = missing_policy_options[missing_policy_label]
+        with attribution3:
+            attribution_method_options = {
+                "新方式（業種全体の下落分）": "v2_sector_absolute",
+                "旧方式（市場・業種の下落分）": "v1_legacy",
+            }
+            current_method = str(st.session_state.get("ui_attribution_method", "v2_sector_absolute"))
+            method_labels = list(attribution_method_options)
+            method_values = list(attribution_method_options.values())
+            method_index = method_values.index(current_method) if current_method in method_values else 0
+            method_label = st.selectbox(
+                "外因説明率の計算方式", method_labels, index=method_index,
+                disabled=active_mode,
+                help="新方式は業種全体の6か月下落分だけを使います。市場上昇中の会社固有の下落を、外因と数えにくくします。旧方式は過去結果との比較用です。業種データが5銘柄未満の場合は、どちらの方式でも計算できません。",
+            )
+            st.session_state["ui_attribution_method"] = attribution_method_options[method_label]
 
         st.markdown("### 5. 値動き活発型の条件")
         dt1, dt2, dt3 = st.columns(3)
@@ -2112,7 +2130,7 @@ def render_condition_builder() -> None:
         if isinstance(candidate_comparison, pd.DataFrame):
             st.markdown("#### 同じデータ・同じ基準日の候補数比較")
             _analysis_dataframe(candidate_comparison, width="stretch", hide_index=True)
-            st.caption("他の条件と評価データを固定し、外因説明率0/30/50/70%とTOPIX比-8%条件の有無だけを変えた比較です。画面操作によるデータ取得はありません。")
+            st.caption("他の条件と評価データを固定し、新旧2方式・外因説明率0/30/50/70%・TOPIX比-8%条件の有無を比較します。画面操作によるデータ取得はありません。")
 
     export_document = profile_document("current_conditions", st.session_state["condition_preset"], overrides)
     export_json = json.dumps(export_document, ensure_ascii=False, indent=2)
@@ -2841,7 +2859,7 @@ def _render_history_walk_forward() -> None:
     if st.button(
         "外因説明率・TOPIX条件をWalk-Forwardで比較",
         key="run_walk_forward_attribution_comparison",
-        help="外因説明率4段階とTOPIX比-8%条件の有無を、同じローカルデータ・同じ過去時点で比較します。8通りを再評価するため時間がかかりますが、外部データは取得しません。",
+        help="外因説明率の新旧2方式、下限4段階、TOPIX比-8%条件の有無を、同じローカルデータ・同じ過去時点で比較します。16通りを再評価するため時間がかかりますが、外部データは取得しません。",
     ):
         local_data = load_curated_latest(ROOT)
         comparison_config = load_config(REAL_CONFIG)
@@ -2865,7 +2883,7 @@ def _render_history_walk_forward() -> None:
 
         def update_comparison_progress(info: dict) -> None:
             variant = int(info.get("variant", 0))
-            total = max(int(info.get("total_variants", 8)), 1)
+            total = max(int(info.get("total_variants", 16)), 1)
             current = int(info.get("snapshot", 0))
             total_snapshots = max(int(info.get("total_snapshots", 1)), 1)
             comparison_progress.progress(min(((variant - 1) + current / total_snapshots) / total, 1.0))
@@ -2874,7 +2892,7 @@ def _render_history_walk_forward() -> None:
                 f"{info.get('message', '処理中')}"
             )
 
-        with st.spinner("同じローカルデータで8通りを評価しています…"):
+        with st.spinner("同じローカルデータで16通りを評価しています…"):
             comparison_result = walk_forward_external_attribution_comparison(
                 local_data["companies"], local_data["prices"], local_data["financials"],
                 comparison_config,
@@ -2887,14 +2905,14 @@ def _render_history_walk_forward() -> None:
             )
         st.session_state["walk_forward_attribution_comparison"] = comparison_result
         comparison_progress.progress(1.0)
-        comparison_status.caption("8通りの比較が完了しました。")
+        comparison_status.caption("16通りの比較が完了しました。")
     wf_attribution_comparison = st.session_state.get("walk_forward_attribution_comparison")
     if isinstance(wf_attribution_comparison, pd.DataFrame) and not wf_attribution_comparison.empty:
         shown = wf_attribution_comparison.copy()
         for column in ["候補平均", "候補プラス率", "類似非選択平均", "選択効果", "選択効果プラス率"]:
             if column in shown:
                 shown[column] = pd.to_numeric(shown[column], errors="coerce") * 100
-        st.markdown("#### 外因説明率・TOPIX条件別のWalk-Forward成績")
+        st.markdown("#### 外因説明率の計算方式・下限・TOPIX条件別のWalk-Forward成績")
         _analysis_dataframe(shown, width="stretch", hide_index=True)
         st.caption("選択効果は候補平均から類似非選択平均を引いた値です。プラス率と確定件数を合わせて確認してください。条件以外は固定しており、将来成績は選定後の採点にのみ使います。")
 
@@ -2995,7 +3013,7 @@ def _render_history_walk_forward() -> None:
         st.markdown("#### 外因説明率と30取引日後実績")
         _analysis_dataframe(shown, width="stretch", hide_index=True)
         st.caption(
-            "この割合は、過去6か月の下落のうち、市場全体や同じ業種の値下がりと重なっていた分の目安です。"
+            "既定方式では、過去6か月の下落のうち、業種全体の値下がりで説明できる分の目安です。"
             "高くても外的要因が原因だと証明されたわけではありません。会社の発表などを別に確認してください。"
         )
 

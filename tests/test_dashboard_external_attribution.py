@@ -15,6 +15,7 @@ def test_attribution_controls_and_comparison_are_visible_in_dashboard():
         "外因以外の条件を通過",
         "外因説明率・TOPIX条件の候補数を比較",
         "外因説明率・TOPIX条件をWalk-Forwardで比較",
+        "外因説明率の計算方式",
     ):
         assert label in source
     assert "0%ならこの条件は使いません" in source
@@ -30,6 +31,7 @@ def test_all_configs_keep_attribution_disabled_and_topix_cutoff_unchanged():
         screen = yaml.safe_load(path.read_text(encoding="utf-8"))["screen"]
         assert screen["minimum_external_shock_attribution"] == 0.0
         assert screen["external_shock_attribution_when_missing"] == "skip_with_warning"
+        assert screen["external_shock_attribution_method"] == "v2_sector_absolute"
         assert screen["minimum_relative_underperformance_6m"] == -0.08
 
 

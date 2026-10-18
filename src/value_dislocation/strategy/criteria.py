@@ -185,7 +185,8 @@ def apply_quantitative_criteria(
     proxy_returns = _numeric_series(scored, "topix_proxy_return_6m", index)
     scored.loc[official_mask, "benchmark_return_6m"] = official_returns.loc[official_mask]
     scored.loc[proxy_mask, "benchmark_return_6m"] = proxy_returns.loc[proxy_mask]
-    scored = add_external_shock_attribution(scored)
+    attribution_method = str(s.get("external_shock_attribution_method", "v2_sector_absolute"))
+    scored = add_external_shock_attribution(scored, method=attribution_method)
 
     attribution_minimum = float(s.get("minimum_external_shock_attribution", 0.0))
     attribution_minimum = min(max(attribution_minimum, 0.0), 1.0)
@@ -427,7 +428,7 @@ def apply_quantitative_criteria(
             warnings.append("減配予想")
         attribution = pd.to_numeric(pd.Series([row.get("external_shock_attribution_score")]), errors="coerce").iloc[0]
         if pd.notna(attribution):
-            warnings.append(f"外因説明率 {float(attribution):.0f}%（市場・業種価格要因の説明率。因果証明ではない）")
+            warnings.append(f"外因説明率 {float(attribution):.0f}%（選択方式による業種・市場の価格比較。因果証明ではない）")
         elif selection_strategy == "value_dislocation" and attribution_minimum > 0.0 and attribution_policy == "skip_with_warning":
             warnings.append("外因説明率を計算できないため、この条件は通して確認事項に残しました")
         elif selection_strategy == "value_dislocation":
@@ -585,27 +586,30 @@ def copy_with_screen_overrides(config: dict[str, Any], overrides: dict[str, Any]
 def external_attribution_screen_comparison(
     prepared: pd.DataFrame, config: dict[str, Any]
 ) -> pd.DataFrame:
-    """Compare 4 attribution cutoffs x TOPIX-relative filter on the same prepared rows."""
+    """Compare both attribution formulas on identical prepared rows."""
     rows: list[dict[str, Any]] = []
     as_of_values = pd.to_datetime(prepared.get("as_of", pd.Series(dtype="datetime64[ns]")), errors="coerce").dropna()
     as_of_label = as_of_values.max().date().isoformat() if not as_of_values.empty else "同一の集約済みスナップショット"
-    for minimum in (0.0, 0.3, 0.5, 0.7):
-        for relative_enabled in (True, False):
-            variant = copy_with_screen_overrides(config, {
-                "screen": {
-                    "minimum_external_shock_attribution": minimum,
-                    "use_relative_underperformance_filter": relative_enabled,
-                    "minimum_relative_underperformance_6m": -0.08,
-                }
-            })
-            evaluated = apply_quantitative_criteria(prepared, variant)
-            rows.append({
-                "基準日": as_of_label,
-                "外因説明率下限": f"{minimum:.0%}" if minimum else "なし",
-                "TOPIX比 -8%以下": "あり" if relative_enabled else "なし",
-                "定量候補数": (
-                    int(evaluated["selected_for_review"].fillna(False).astype(bool).sum())
-                    if "selected_for_review" in evaluated.columns else 0
-                ),
-            })
+    for method in ("v2_sector_absolute", "v1_legacy"):
+        for minimum in (0.0, 0.3, 0.5, 0.7):
+            for relative_enabled in (True, False):
+                variant = copy_with_screen_overrides(config, {
+                    "screen": {
+                        "minimum_external_shock_attribution": minimum,
+                        "external_shock_attribution_method": method,
+                        "use_relative_underperformance_filter": relative_enabled,
+                        "minimum_relative_underperformance_6m": -0.08,
+                    }
+                })
+                evaluated = apply_quantitative_criteria(prepared, variant)
+                rows.append({
+                    "基準日": as_of_label,
+                    "計算方式": "新方式（業種全体）" if method == "v2_sector_absolute" else "旧方式",
+                    "外因説明率下限": f"{minimum:.0%}" if minimum else "なし",
+                    "TOPIX比 -8%以下": "あり" if relative_enabled else "なし",
+                    "定量候補数": (
+                        int(evaluated["selected_for_review"].fillna(False).astype(bool).sum())
+                        if "selected_for_review" in evaluated.columns else 0
+                    ),
+                })
     return pd.DataFrame(rows)

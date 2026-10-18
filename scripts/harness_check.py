@@ -399,6 +399,7 @@ def check_walk_forward_invariants(root: Path) -> CheckResult:
     ]
     missing_files = [str(path.relative_to(root)) for path in required_files if not path.exists()]
     validation = validation_path.read_text(encoding="utf-8") if validation_path.exists() else ""
+    attribution = attribution_path.read_text(encoding="utf-8") if attribution_path.exists() else ""
     tests = tests_path.read_text(encoding="utf-8") if tests_path.exists() else ""
     cache = cache_path.read_text(encoding="utf-8") if cache_path.exists() else ""
     cache_tests = cache_tests_path.read_text(encoding="utf-8") if cache_tests_path.exists() else ""
@@ -440,6 +441,8 @@ def check_walk_forward_invariants(root: Path) -> CheckResult:
         "test_walk_forward_horizon_support_boundary_and_empty_history",
         "test_walk_forward_reports_point_in_time_rejection_diagnostics",
         "test_applied_screen_overrides_replace_base_rules_for_walk_forward",
+        "test_v2_attribution_matches_four_sector_absolute_cases",
+        "test_v2_attribution_is_unavailable_for_non_decline_or_insufficient_sector_data",
     ]
     required_cache = [
         "walk_forward_cache_key",
@@ -478,6 +481,13 @@ def check_walk_forward_invariants(root: Path) -> CheckResult:
     forbidden_fetch_terms = ["fetch_and_curate_jquants", "import yfinance", "from yfinance"]
     missing_validation = [term for term in required_validation if term not in validation]
     missing_tests = [term for term in required_tests if term not in tests]
+    required_attribution = [
+        'DEFAULT_ATTRIBUTION_METHOD = "v2_sector_absolute"',
+        'MINIMUM_SECTOR_PEERS = 5',
+        'clip(upper=total_decline)',
+        '"v1_legacy"',
+    ]
+    missing_attribution = [term for term in required_attribution if term not in attribution]
     missing_cache = [term for term in required_cache if term not in cache]
     missing_cache_tests = [term for term in required_cache_tests if term not in cache_tests]
     missing_dashboard = [term for term in required_dashboard if term not in dashboard]
@@ -486,7 +496,7 @@ def check_walk_forward_invariants(root: Path) -> CheckResult:
     forbidden_found = [term for term in forbidden_fetch_terms if term in validation]
     passed = (
         not missing_files and not missing_validation and not missing_tests
-        and not missing_cache and not missing_cache_tests
+        and not missing_attribution and not missing_cache and not missing_cache_tests
         and not missing_dashboard and not missing_master and not missing_master_tests
         and not forbidden_found
     )
@@ -497,6 +507,7 @@ def check_walk_forward_invariants(root: Path) -> CheckResult:
             "missing_files": missing_files,
             "missing_validation": missing_validation,
             "missing_tests": missing_tests,
+            "missing_attribution": missing_attribution,
             "missing_cache": missing_cache,
             "missing_cache_tests": missing_cache_tests,
             "missing_dashboard": missing_dashboard,
@@ -525,6 +536,7 @@ def check_blueprint(root: Path) -> CheckResult:
         "walk_forward_selection_must_not_use_future_prices",
         "matched_controls_must_exclude_selected_securities",
         "external_shock_attribution_must_not_replace_human_event_review",
+        "external_attribution_v2_must_use_absolute_sector_decline",
         "walk_forward_validation_must_not_trigger_market_data_fetch",
         "walk_forward_horizons_must_use_trading_sessions",
         "walk_forward_must_report_survivorship_coverage",

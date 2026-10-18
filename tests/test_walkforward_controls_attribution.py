@@ -26,6 +26,9 @@ def test_walk_forward_attribution_uses_only_prices_available_on_replay_date():
     close_series = {
         "A": [100.0] * 34 + [80.0] + [10.0] * 5,
         "B": [100.0] * 34 + [85.0] + [10.0] * 5,
+        "C": [100.0] * 34 + [90.0] + [10.0] * 5,
+        "D": [100.0] * 34 + [90.0] + [10.0] * 5,
+        "E": [100.0] * 34 + [90.0] + [10.0] * 5,
     }
     topix_series = [1000.0] * 34 + [900.0] + [1500.0] * 5
     for code, closes in close_series.items():
@@ -40,26 +43,31 @@ def test_walk_forward_attribution_uses_only_prices_available_on_replay_date():
     prices = pd.DataFrame(rows)
     as_of = dates[34]
     companies = pd.DataFrame([
-        {"code": "A", "name": "A", "sector": "Tech", "market": "Prime"},
-        {"code": "B", "name": "B", "sector": "Tech", "market": "Prime"},
+        {"code": code, "name": code, "sector": "Tech", "market": "Prime"}
+        for code in close_series
     ])
     financials = pd.DataFrame([
-        {"code": code, "disclosure_date": dates[0]} for code in ("A", "B")
+        {"code": code, "disclosure_date": dates[0]} for code in close_series
     ])
 
     point_companies, point_prices, _, _ = validation._point_in_time_inputs(
         companies, prices, financials, as_of
     )
-    assert set(point_companies["code"]) == {"A", "B"}
+    assert set(point_companies["code"]) == set(close_series)
     assert point_prices["date"].max().normalize() == as_of.normalize()
 
     features = price_features(point_prices, as_of).set_index("code")
     sector_median = features["return_6m"].median()
     features["sector_return_6m_median"] = sector_median
+    features["sector_peer_count_6m"] = features["return_6m"].count()
+    assert features["sector_peer_count_6m"].eq(5).all()
     features["benchmark_source"] = "official_topix"
     features["benchmark_return_6m"] = features["topix_return_6m"]
     past_attribution = add_external_shock_attribution(features.reset_index()).set_index("code")
-    assert np.isclose(past_attribution.loc["A", "external_shock_attribution"], 0.875)
+    assert np.isclose(
+        past_attribution.loc["A", "external_shock_attribution"],
+        np.clip(-sector_median, 0, -features.loc["A", "return_6m"]) / -features.loc["A", "return_6m"],
+    )
 
     # Changing all post-selection prices cannot change the point-in-time result.
     altered = prices.copy()
@@ -71,6 +79,8 @@ def test_walk_forward_attribution_uses_only_prices_available_on_replay_date():
     )
     altered_features = price_features(altered_point_prices, as_of).set_index("code")
     altered_features["sector_return_6m_median"] = altered_features["return_6m"].median()
+    altered_features["sector_peer_count_6m"] = altered_features["return_6m"].count()
+    assert altered_features["sector_peer_count_6m"].eq(5).all()
     altered_features["benchmark_source"] = "official_topix"
     altered_features["benchmark_return_6m"] = altered_features["topix_return_6m"]
     altered_attribution = add_external_shock_attribution(altered_features.reset_index()).set_index("code")
@@ -80,12 +90,12 @@ def test_walk_forward_attribution_uses_only_prices_available_on_replay_date():
     )
 
 
-def test_walk_forward_comparison_runs_eight_screen_variants(monkeypatch):
+def test_walk_forward_comparison_runs_sixteen_screen_variants(monkeypatch):
     seen = []
 
     def fake_walk_forward(companies, prices, financials, config, **kwargs):
         screen = config["screen"]
-        seen.append((screen["minimum_external_shock_attribution"], screen["use_relative_underperformance_filter"], screen["minimum_relative_underperformance_6m"]))
+        seen.append((screen["external_shock_attribution_method"], screen["minimum_external_shock_attribution"], screen["use_relative_underperformance_filter"], screen["minimum_relative_underperformance_6m"]))
         count = int(screen["minimum_external_shock_attribution"] * 10) + int(screen["use_relative_underperformance_filter"])
         return pd.DataFrame([{
             "return_10d": 0.10,
@@ -99,9 +109,10 @@ def test_walk_forward_comparison_runs_eight_screen_variants(monkeypatch):
         {"universe": {}, "screen": {"minimum_relative_underperformance_6m": -0.12}},
         settings=WalkForwardConfig(), horizons=(10,),
     )
-    assert len(result) == 8
-    assert len(seen) == 8
-    assert {variant[2] for variant in seen} == {-0.08}
+    assert len(result) == 16
+    assert len(seen) == 16
+    assert {variant[3] for variant in seen} == {-0.08}
+    assert {variant[0] for variant in seen} == {"v1_legacy", "v2_sector_absolute"}
     assert result["選択効果"].dropna().eq(0.08).all()
 
 
@@ -109,6 +120,7 @@ def test_external_shock_attribution_decomposes_decline():
     frame = pd.DataFrame([
         {"return_6m": -0.25, "sector_return_6m_median": -0.19, "benchmark_return_6m": -0.07},
     ])
+    frame["sector_peer_count_6m"] = 5
     out = add_external_shock_attribution(frame).iloc[0]
     assert out["market_return_component_6m"] == -0.07
     assert np.isclose(out["sector_incremental_component_6m"], -0.12)
@@ -121,9 +133,48 @@ def test_external_shock_attribution_does_not_invent_missing_benchmark():
     frame = pd.DataFrame([
         {"return_6m": -0.20, "sector_return_6m_median": -0.15, "benchmark_return_6m": np.nan},
     ])
-    out = add_external_shock_attribution(frame).iloc[0]
+    frame["sector_peer_count_6m"] = 5
+    out = add_external_shock_attribution(frame, method="v1_legacy").iloc[0]
     assert pd.isna(out["external_shock_attribution"])
     assert not bool(out["external_shock_attribution_available"])
+
+
+def test_v2_attribution_matches_four_sector_absolute_cases():
+    frame = pd.DataFrame([
+        {"benchmark_return_6m": 0.10, "sector_return_6m_median": 0.00, "return_6m": -0.10},
+        {"benchmark_return_6m": 0.10, "sector_return_6m_median": -0.05, "return_6m": -0.10},
+        {"benchmark_return_6m": -0.10, "sector_return_6m_median": -0.10, "return_6m": -0.10},
+        {"benchmark_return_6m": 0.00, "sector_return_6m_median": 0.00, "return_6m": -0.10},
+    ])
+    frame["sector_peer_count_6m"] = 5
+    out = add_external_shock_attribution(frame)
+    assert out["external_shock_attribution"].tolist() == [0.0, 0.5, 1.0, 0.0]
+    assert out["external_shock_attribution"].between(0.0, 1.0).all()
+    legacy = add_external_shock_attribution(frame, method="v1_legacy")
+    assert legacy["external_shock_attribution"].tolist() == [1.0, 1.0, 1.0, 0.0]
+
+
+def test_v2_attribution_clamps_sector_move_to_stock_decline():
+    frame = pd.DataFrame([
+        {"return_6m": -0.10, "sector_return_6m_median": -0.50, "sector_peer_count_6m": 5},
+        {"return_6m": -0.10, "sector_return_6m_median": 0.20, "sector_peer_count_6m": 5},
+    ])
+    out = add_external_shock_attribution(frame)
+    assert out["external_shock_attribution"].tolist() == [1.0, 0.0]
+
+
+def test_v2_attribution_is_unavailable_for_non_decline_or_insufficient_sector_data():
+    frame = pd.DataFrame([
+        {"return_6m": 0.0, "sector_return_6m_median": -0.1, "benchmark_return_6m": -0.1, "sector_peer_count_6m": 5},
+        {"return_6m": 0.1, "sector_return_6m_median": -0.1, "benchmark_return_6m": 0.0, "sector_peer_count_6m": 5},
+        {"return_6m": -0.1, "sector_return_6m_median": np.nan, "benchmark_return_6m": 0.0, "sector_peer_count_6m": 5},
+        {"return_6m": -0.1, "sector_return_6m_median": -0.1, "benchmark_return_6m": 0.0, "sector_peer_count_6m": 4},
+    ])
+    out = add_external_shock_attribution(frame)
+    assert out["external_shock_attribution"].isna().all()
+    assert out["external_shock_attribution_unavailable_reason"].tolist() == [
+        "6か月騰落が0以上", "6か月騰落が0以上", "業種データ不足", "業種データ不足",
+    ]
 
 
 def test_matched_controls_prefers_same_sector_non_selected():

@@ -32,13 +32,18 @@ At least two comparable dimensions are required. The result reports the selected
 
 ## External Shock Attribution
 
-The six-month stock return is decomposed as:
+The default `v2_sector_absolute` method calculates the share of a declining stock's fall
+covered by the absolute decline of its sector median:
 
-`stock = market + (sector - market) + (stock - sector)`
+`clip(-sector_median_return_6m, 0, -stock_return_6m) / -stock_return_6m`
 
-The attribution ratio is the fraction of an observed stock decline explained by negative market and sector components, capped to 0..100%.
-It is descriptive evidence only; it does not prove causality and never replaces the human external-event review.
-Missing benchmark/sector data remains missing and is never fabricated as zero.
+Market return is not added because the sector return already includes the market move.
+The `v1_legacy` setting remains available for comparison and sums negative market and
+sector-increment components. Both methods require a declining stock and at least five
+sector peers; missing or insufficient sector data stays unavailable. The comparison view
+evaluates both methods across the same local data and point-in-time replay dates, reporting
+candidate counts, selection effect, positive rate, and confirmed counts. This ratio is
+descriptive evidence only; it does not prove causality and never replaces human review.
 
 
 ## Point-in-time universe and survivorship coverage

@@ -44,7 +44,7 @@ J-Quants実データ更新時のCompanyMasterを、`data/history/security_master
 
 価格特徴量はJ-Quantsの調整済みOHLCVを優先する。
 
-外因説明率は保存元データへ追加取得せず、基準日までの株価特徴量から算出する。画面上の監査列 `external_shock_attribution_unavailable_reason` は、計算不能時に「6か月騰落が0以上」「比較データ不足」「業種データ不足」のいずれかを記録する。
+外因説明率は保存元データへ追加取得せず、基準日までの株価特徴量から算出する。`sector_peer_count_6m` は有効な6か月騰落を持つ業種内銘柄数を表し、5銘柄未満なら業種中央値を信頼できる比較値として扱わない。既定方式 `v2_sector_absolute` は業種中央値の6か月下落分を銘柄の下落幅で割り、0〜1に制限する。旧方式 `v1_legacy` との比較もできる。画面上の監査列 `external_shock_attribution_unavailable_reason` は、計算不能時に「6か月騰落が0以上」「比較データ不足」「業種データ不足」のいずれかを記録する。
 
 ## FinancialSnapshot
 
@@ -59,7 +59,7 @@ J-Quants決算サマリーにない有利子負債は現段階で欠損とし、
 ## WalkForwardEvent
 
 既存の選定日・銘柄・将来リターン・類似非選択比較・銘柄マスター監査列に加え、
-`intuitive_symbol,evidence_score,legacy_star_eligible,reversal_star_eligible,star_rule_version,trend_score`
+`intuitive_symbol,evidence_score,legacy_star_eligible,reversal_star_eligible,star_rule_version,trend_score,external_shock_attribution_method`
 を保存する。待機買付の結果は `return_{N}d_entry_delay_3d` と
 `return_{N}d_entry_delay_5d` とし、資格判定完了後の結果評価にだけ利用する。
 

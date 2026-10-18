@@ -45,6 +45,20 @@ def test_legacy_active_trading_score_is_not_converted(tmp_path: Path):
     assert row["strategy_score"] == 42.0
 
 
+def test_legacy_attribution_history_is_labeled_as_legacy_in_memory(tmp_path: Path):
+    folder = tmp_path / "data" / "history" / "analysis"
+    folder.mkdir(parents=True)
+    path = folder / "2025-01-02.csv.gz"
+    pd.DataFrame([{
+        "analysis_date": "2025-01-02", "code": "11110",
+        "external_shock_attribution": 0.75,
+    }]).to_csv(path, index=False, compression="gzip")
+    original = path.read_bytes()
+    row = load_analysis_history(tmp_path).iloc[0]
+    assert row["external_shock_attribution_method"] == "v1_legacy"
+    assert path.read_bytes() == original
+
+
 def test_evaluation_upsert_and_star_forward_returns(tmp_path: Path):
     def save(day, symbol, price):
         frame=pd.DataFrame([{"raw_code":"72030","企業名":"A","市場":"Prime","直感判定":f"{symbol} 買い候補","最新株価":price,"selection_strategy":"value_dislocation"}])
