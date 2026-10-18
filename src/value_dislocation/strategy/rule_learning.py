@@ -239,7 +239,9 @@ def _attach_forward_returns(analysis: pd.DataFrame, prices: pd.DataFrame) -> pd.
             if valid.any():
                 values[valid] = closes[pos[valid]] / entry[valid] - 1.0
             g[f"return_{horizon}d"] = values
-            outcome_dates = np.full(len(g), np.datetime64("NaT"), dtype="datetime64[ns]")
+            # Give NaT an explicit unit. A generic-unit datetime64 can trigger
+            # NumPy's deprecated generic timedelta conversion during assignment.
+            outcome_dates = np.full(len(g), np.datetime64("NaT", "ns"), dtype="datetime64[ns]")
             if valid.any():
                 outcome_dates[valid] = dates[pos[valid]]
             g[f"outcome_date_{horizon}d"] = pd.to_datetime(outcome_dates)
