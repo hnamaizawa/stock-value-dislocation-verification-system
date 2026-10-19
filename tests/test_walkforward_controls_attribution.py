@@ -18,6 +18,7 @@ from value_dislocation.validation import (
     walk_forward_history_diagnostics,
     walk_forward_summary,
     walk_forward_validation,
+    walk_forward_readiness,
 )
 
 
@@ -353,6 +354,48 @@ def test_walk_forward_horizon_support_boundary_and_empty_history():
     assert supported_walk_forward_horizons(minimum, (10, 20), minimum_history_trading_days=60) == (10,)
     assert supported_walk_forward_horizons(insufficient, (10, 20), minimum_history_trading_days=60) == ()
     assert supported_walk_forward_horizons(pd.DataFrame(), (10,)) == ()
+
+
+def test_walk_forward_readiness_reports_required_history_horizons_and_mode_gap():
+    prices = pd.DataFrame({"date": pd.bdate_range("2024-01-02", periods=500)})
+    result = walk_forward_readiness(
+        prices,
+        requested_horizons=(10, 30, 90, 180),
+        max_snapshots=8,
+        spacing_trading_days=20,
+        minimum_history_trading_days=252,
+        entry_delay_trading_days=(3, 5),
+    )
+    assert result["available_trading_days"] == 500
+    assert result["maximum_supported_horizon"] == 243
+    assert result["supported_horizons"] == (10, 30, 90, 180)
+    assert result["usable_replay_dates"] == 4
+    assert result["minimum_sessions_for_one_replay_date"] == 438
+    assert result["minimum_sessions_for_selected_mode"] == 578
+    assert result["additional_sessions_for_selected_mode"] == 78
+
+
+def test_walk_forward_readiness_reports_no_supported_horizon_when_history_is_short():
+    prices = pd.DataFrame({"date": pd.bdate_range("2025-01-02", periods=260)})
+    result = walk_forward_readiness(
+        prices,
+        requested_horizons=(10, 30),
+        max_snapshots=3,
+        spacing_trading_days=40,
+    )
+    assert result["maximum_supported_horizon"] == 0
+    assert result["supported_horizons"] == ()
+    assert result["minimum_sessions_for_one_replay_date"] == 268
+    assert result["additional_sessions_for_selected_mode"] == 88
+
+
+def test_real_price_lookback_default_is_extended_in_both_real_configs():
+    import yaml
+
+    for path in ("config/real_data.yaml", "config/real_data.example.yaml"):
+        with open(path, encoding="utf-8") as handle:
+            config = yaml.safe_load(handle)
+        assert config["runtime"]["price_lookback_days"] == 900
 
 
 def test_walk_forward_reports_point_in_time_rejection_diagnostics(monkeypatch):

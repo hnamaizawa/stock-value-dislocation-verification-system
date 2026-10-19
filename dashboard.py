@@ -86,6 +86,7 @@ from value_dislocation.validation import (
     walk_forward_summary,
     walk_forward_validation,
     walk_forward_history_diagnostics,
+    walk_forward_readiness,
 )
 from value_dislocation.hypothesis_invalidation import (
     METRIC_DEFINITIONS,
@@ -2679,6 +2680,12 @@ def _walk_forward_data_signature() -> str:
     ).hexdigest()
 
 
+@st.cache_data(show_spinner=False, max_entries=2)
+def _cached_walk_forward_prices(root_text: str, data_signature: str) -> pd.DataFrame:
+    """Reuse local prices for UI readiness checks without an external data request."""
+    return load_curated_latest(Path(root_text))["prices"]
+
+
 def _render_history_walk_forward() -> None:
     st.markdown("### Walk-Forward過去検証")
     st.caption(
@@ -2756,6 +2763,38 @@ def _render_history_walk_forward() -> None:
         spacing = int(mode["spacing"])
         controls = int(mode["controls"])
         horizons = tuple(int(value) for value in mode["horizons"])
+
+    readiness_signature = _walk_forward_data_signature()
+    readiness_prices = _cached_walk_forward_prices(str(ROOT), readiness_signature)
+    readiness = walk_forward_readiness(
+        readiness_prices,
+        requested_horizons=horizons,
+        max_snapshots=snapshots,
+        spacing_trading_days=spacing,
+    )
+    supported = tuple(readiness["supported_horizons"])
+    horizon_text = ", ".join(map(str, supported)) if supported else "なし"
+    st.markdown("#### 実行前のデータ量チェック")
+    st.caption(
+        f"保存済み日足は{readiness['available_trading_days']:,}取引日分です。"
+        f"本番と同じ特徴計算には過去{readiness['required_history_trading_days']:,}日が必要で、"
+        f"現在の設定で確定成績を出せる最長期間は{readiness['maximum_supported_horizon']:,}取引日、"
+        f"利用可能な評価期間は{horizon_text}日です。"
+        f"選択モードの{readiness['requested_snapshots']:,}時点を確保するには、"
+        f"あと{readiness['additional_sessions_for_selected_mode']:,}取引日分の履歴が目安です。"
+    )
+    if not supported:
+        st.warning(
+            f"選択した評価期間では再現日を作れません。まず1時点を作るには"
+            f"最低{readiness['minimum_sessions_for_one_replay_date']:,}取引日分が必要です。"
+            "設定の価格取得期間を広げてデータ更新を実行してください。"
+        )
+    elif len(supported) < len(set(horizons)) or int(readiness["usable_replay_dates"]) < int(snapshots):
+        st.warning(
+            f"選択した評価期間の一部、または再現時点数をデータで確保できません。"
+            f"現在は{readiness['usable_replay_dates']:,}/{snapshots:,}時点を利用できます。"
+            "結果は少ない時点に基づくため、候補が0件でも判定条件とデータ不足を分けて確認してください。"
+        )
 
     st.caption(
         "類似銘柄は同業種を優先し、時価総額・52週下落率・60日ボラ・PER/PBRの業種比が近い"

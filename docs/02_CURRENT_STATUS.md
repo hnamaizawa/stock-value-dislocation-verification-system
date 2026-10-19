@@ -1,5 +1,9 @@
 # Current status
 
+## Version 0.6.84
+
+Walk-Forward実行前に、保存済み日足から確定可能な評価期間、利用可能な再現時点数、選択モードの時点数に足りない取引日数を表示する。価格取得期間の既定値を400暦日から900暦日に広げた。J-Quants契約の実効期間は契約と利用者のデータ更新結果に依存し、この環境では実データ・候補数・成績を測定していない。
+
 ## Version 0.6.83
 
 NumPy日時配列の初期値とテスト用日付加算で単位を明示し、generic timedeltaの非推奨警告を解消した。分析ロジック、選定結果、外部データ取得動作は変更していない。
@@ -101,7 +105,7 @@ The application now precomputes security-level features after each actual-data u
 # Current Status
 
 最終更新: 2026-10-19
-対象バージョン: 0.6.83
+対象バージョン: 0.6.84
 
 ## 現在動作するもの
 

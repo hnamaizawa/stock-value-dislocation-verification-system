@@ -1,5 +1,11 @@
 # Development Harness
 
+### v0.6.84 Walk-Forward履歴の事前診断
+
+- 価格取得の既定期間は実データ設定・サンプル設定とも900暦日。
+- Walk-Forward画面はローカル日足だけで、最大評価期間、利用可能再現日数、選択モードに必要な不足日数を事前表示する。
+- 表示だけではJ-Quants/Yahooを呼ばず、252取引日の履歴要件・候補条件・point-in-time制約を緩和しない。
+
 ### v0.6.82 株価下落スコア方式比較
 
 - `legacy_depth` を既定値のまま維持し、`external_explained` がv2外因説明率で加重すること。

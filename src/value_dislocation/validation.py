@@ -51,6 +51,58 @@ def supported_walk_forward_horizons(
     return tuple(sorted({int(value) for value in horizons if int(value) <= maximum_supported_horizon}))
 
 
+def walk_forward_readiness(
+    prices: pd.DataFrame,
+    *,
+    requested_horizons: Iterable[int],
+    max_snapshots: int = 8,
+    spacing_trading_days: int = 20,
+    minimum_history_trading_days: int = 252,
+    entry_delay_trading_days: Iterable[int] = (3, 5),
+) -> dict[str, int | tuple[int, ...]]:
+    """Summarize local history support before starting a Walk-Forward run."""
+    dates = pd.Series(dtype="datetime64[ns]")
+    if not prices.empty and "date" in prices.columns:
+        dates = pd.Series(
+            pd.to_datetime(prices["date"], errors="coerce").dropna().dt.normalize().unique()
+        ).sort_values().reset_index(drop=True)
+    available = int(len(dates))
+    requested = tuple(sorted({int(value) for value in requested_horizons}))
+    delay = max((int(value) for value in entry_delay_trading_days), default=0)
+    history = int(minimum_history_trading_days)
+    usable = supported_walk_forward_horizons(
+        prices,
+        requested,
+        minimum_history_trading_days=history,
+        entry_delay_trading_days=(delay,),
+    )
+    maximum_horizon = max(usable, default=0)
+    future = maximum_horizon + delay if maximum_horizon else min(requested, default=0) + delay
+    minimum_one = history + future + 1
+    snapshots = max(int(max_snapshots), 1)
+    spacing = max(int(spacing_trading_days), 1)
+    minimum_mode = minimum_one + (snapshots - 1) * spacing
+    usable_dates = _walk_forward_dates(
+        prices,
+        max_snapshots=snapshots,
+        spacing_trading_days=spacing,
+        minimum_history_trading_days=history,
+        required_future_sessions=max(future, 1),
+    )
+    return {
+        "available_trading_days": available,
+        "required_history_trading_days": history,
+        "maximum_supported_horizon": maximum_horizon,
+        "supported_horizons": usable,
+        "requested_horizons": requested,
+        "usable_replay_dates": len(usable_dates),
+        "requested_snapshots": snapshots,
+        "minimum_sessions_for_one_replay_date": minimum_one,
+        "minimum_sessions_for_selected_mode": minimum_mode,
+        "additional_sessions_for_selected_mode": max(minimum_mode - available, 0),
+    }
+
+
 def _numeric(frame: pd.DataFrame, column: str) -> pd.Series:
     if column not in frame.columns:
         return pd.Series(np.nan, index=frame.index, dtype=float)
