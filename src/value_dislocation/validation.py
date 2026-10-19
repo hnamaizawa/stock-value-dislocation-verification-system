@@ -76,8 +76,8 @@ def walk_forward_readiness(
         minimum_history_trading_days=history,
         entry_delay_trading_days=(delay,),
     )
-    maximum_horizon = max(usable, default=0)
-    future = maximum_horizon + delay if maximum_horizon else min(requested, default=0) + delay
+    maximum_horizon = max(available - history - delay, 0)
+    future = max(usable, default=min(requested, default=0)) + delay
     minimum_one = history + future + 1
     snapshots = max(int(max_snapshots), 1)
     spacing = max(int(spacing_trading_days), 1)

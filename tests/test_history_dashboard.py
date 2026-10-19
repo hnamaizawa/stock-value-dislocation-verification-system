@@ -34,7 +34,7 @@ def test_walk_forward_preflight_shows_local_history_support_before_run():
     assert 'st.markdown("#### 実行前のデータ量チェック")' in text
     assert "walk_forward_readiness(" in text
     assert "_cached_walk_forward_prices(" in text
-    assert "必要な追加取引日数" in text
+    assert 'readiness["additional_sessions_for_selected_mode"]' in text
 
 
 def test_daily_history_search_supports_final_evaluation_filter():

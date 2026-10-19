@@ -383,7 +383,7 @@ def test_walk_forward_readiness_reports_no_supported_horizon_when_history_is_sho
         max_snapshots=3,
         spacing_trading_days=40,
     )
-    assert result["maximum_supported_horizon"] == 0
+    assert result["maximum_supported_horizon"] == 3
     assert result["supported_horizons"] == ()
     assert result["minimum_sessions_for_one_replay_date"] == 268
     assert result["additional_sessions_for_selected_mode"] == 88
