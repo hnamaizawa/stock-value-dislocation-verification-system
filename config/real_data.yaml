@@ -45,7 +45,7 @@ paths:
 runtime:
   timezone: Asia/Tokyo
   use_latest_completed_trading_day: true
-  price_lookback_days: 400
+  price_lookback_days: 900
   financial_lookback_days: 1150
   fail_on_partial_data: true
   reject_sample_data: true

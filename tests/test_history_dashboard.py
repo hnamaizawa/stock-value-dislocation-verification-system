@@ -29,6 +29,14 @@ def test_history_page_is_registered_in_top_navigation():
     assert '[DATA_PAGE, CONDITION_PAGE, STOCK_DETAIL_PAGE, HISTORY_PAGE, SBI_IMPORT_PAGE, DEMO_PAGE, SAFETY_PAGE]' in text
 
 
+def test_walk_forward_preflight_shows_local_history_support_before_run():
+    text = Path("dashboard.py").read_text(encoding="utf-8")
+    assert 'st.markdown("#### 実行前のデータ量チェック")' in text
+    assert "walk_forward_readiness(" in text
+    assert "_cached_walk_forward_prices(" in text
+    assert "additional_sessions_for_selected_mode" in text
+
+
 def test_daily_history_search_supports_final_evaluation_filter():
     text = Path("dashboard.py").read_text(encoding="utf-8")
     assert 'multiselect("当日の最終評価", final_options' in text

@@ -29,10 +29,11 @@ def test_readme_has_single_top_level_version_history_in_descending_order():
     readme = Path("README.md").read_text(encoding="utf-8")
     lines = readme.splitlines()
     assert lines[0] == "# Stock Value Dislocation Verification System"
-    assert lines[2] == "Version: **0.6.83**"
+    assert lines[2] == "Version: **0.6.84**"
     assert readme.count("## 開発履歴（新しい順）") == 1
     assert "Version: **0.6.51**" not in readme
     versions = [
+        "### v0.6.84 Walk-Forwardの事前データ診断と履歴期間",
         "### v0.6.83 NumPy日時単位のDeprecationWarningを解消",
         "### v0.6.82 外因説明率を使った下落スコア比較",
         "### v0.6.81 Walk-Forwardの定義・件数・確からしさ",
