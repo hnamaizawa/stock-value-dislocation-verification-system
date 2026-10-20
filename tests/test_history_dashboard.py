@@ -86,8 +86,9 @@ def test_history_dashboard_uses_lazy_sections_cache_and_pagination():
     assert "_cached_load_star_outcomes(" in text
     assert "_cached_condition_performance(" in text
     assert "_history_page_slice(" in text
-    assert 'button("Yahooで10/20/30/60/90/180日実績を更新"' in text
-    assert "画面を開いただけではYahooへアクセスしません" in text
+    assert 'button("Yahooで10/20/30/60/90/180取引日実績を更新"' in text
+    assert "通常表示では保存済み日足だけを使い、Yahooへはアクセスしません" in text
+    assert "判定後の取引セッション数" in text
 
 
 def test_history_module_can_load_saved_star_outcomes_without_rebuild():
@@ -98,7 +99,8 @@ def test_history_module_can_load_saved_star_outcomes_without_rebuild():
 
 def test_star_validation_reconciles_all_events_and_has_explicit_pager():
     text = Path("dashboard.py").read_text(encoding="utf-8")
-    assert "reconcile_star_outcomes(evaluation, saved_star_events)" in text
+    assert "reconcile_star_outcomes(" in text
+    assert "histories=local_histories" in text
     assert 'st.markdown("#### ◎☆銘柄サマリ（同一銘柄は1行）")' in text
     assert "summarize_star_outcomes_by_code(star_events)" in text
     assert 'button("◀ 前へ"' in text

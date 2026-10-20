@@ -1,5 +1,9 @@
 # v0.6.63 Walk-Forward / matched controls / external-shock attribution
 
+## ◎☆履歴実績との期間定義（v0.6.85）
+
+◎☆履歴実績も、判定日の後に続くN取引セッションの終値で評価する。Walk-Forward候補と実際の◎☆イベントは選定条件・基準時点が異なるため、成績を同一母集団として直接比較しない。期間別平均には確定件数を併記し、確定件数が異なる平均は別の観測集団として読む。
+
 ## Purpose
 
 Validate the value-dislocation quantitative screen without waiting only for future live outcomes.

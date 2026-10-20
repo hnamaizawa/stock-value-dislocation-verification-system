@@ -100,7 +100,12 @@ def test_rule_comparison_is_prospective_and_keeps_legacy_history():
     ])
     assert len(build_star_events(rows, star_mode="legacy")) == 2
     assert len(build_star_events(rows, star_mode="reversal")) == 1
-    reconciled = reconcile_star_outcomes(rows)
+    dates = pd.bdate_range("2026-09-21", periods=21)
+    histories = {
+        "1111": pd.DataFrame({"date": dates, "close": [100.0] * 19 + [99.0, 99.0]}),
+        "2222": pd.DataFrame({"date": dates, "close": [100.0] * 19 + [101.0, 101.0]}),
+    }
+    reconciled = reconcile_star_outcomes(rows, histories=histories)
     comparison = reconciled.attrs["star_rule_comparison"]
     legacy = comparison.loc[comparison["判定方式"] == "旧◎☆条件"].iloc[0]
     reversal = comparison.loc[comparison["判定方式"] == "反転確認◎☆"].iloc[0]
