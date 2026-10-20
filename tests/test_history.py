@@ -69,8 +69,9 @@ def test_evaluation_upsert_and_star_forward_returns(tmp_path: Path):
     save("2026-04-03","○",132)
     events=build_star_events(load_evaluation_history(tmp_path))
     assert len(events)==1
-    assert round(events.iloc[0]["return_30d"],6)==0.1
-    assert round(events.iloc[0]["return_90d"],6)==0.2
+    # Sparse evaluation rows are not daily trading-session observations.
+    assert pd.isna(events.iloc[0]["return_30d"])
+    assert pd.isna(events.iloc[0]["return_90d"])
     assert pd.isna(events.iloc[0]["return_180d"])
 
 
@@ -81,7 +82,15 @@ def test_condition_performance_uses_analysis_snapshot(tmp_path: Path):
     for day,symbol,price in [("2026-01-02","◎☆",100),("2026-02-02","◎☆",110)]:
         f=pd.DataFrame([{"raw_code":"72030","企業名":"A","直感判定":f"{symbol} 買い候補","最新株価":price,"selection_strategy":"value_dislocation"}])
         upsert_daily_evaluations(tmp_path,f,evaluation_date=day,analysis_as_of="2026-01-02")
-    perf=condition_performance(tmp_path)
+    evaluations = load_evaluation_history(tmp_path)
+    events = build_star_events(evaluations)
+    dates = pd.bdate_range("2026-01-02", periods=31)
+    closes = [100.0] * 31
+    closes[30] = 110.0
+    events = enrich_star_events_with_market_histories(
+        events, {"72030": pd.DataFrame({"date": dates, "close": closes})}
+    )
+    perf=condition_performance(tmp_path, events)
     row=perf.loc[perf["条件"]=="営業利益率 10%以上"].iloc[0]
     assert row["該当イベント数"]==1
     assert round(row["30日平均"],6)==0.1
@@ -89,10 +98,11 @@ def test_condition_performance_uses_analysis_snapshot(tmp_path: Path):
 
 def test_market_history_enrichment_fills_return_even_if_candidate_not_seen_again():
     events=pd.DataFrame([{"code":"72030","star_date":"2026-01-02","entry_price":100.0,"return_30d":None,"actual_days_30d":None}])
-    history=pd.DataFrame({"date":pd.to_datetime(["2026-01-02","2026-02-03"]),"close":[100.0,115.0]})
+    dates = pd.bdate_range("2026-01-02", periods=31)
+    history=pd.DataFrame({"date":dates,"close":[100.0] + [115.0] * 30})
     out=enrich_star_events_with_market_histories(events,{"72030":history},horizons=(30,))
     assert round(out.iloc[0]["return_30d"],6)==0.15
-    assert out.iloc[0]["actual_days_30d"]==32
+    assert out.iloc[0]["actual_days_30d"]==(dates[30] - dates[0]).days
 
 
 def test_analysis_history_can_attach_same_day_final_evaluation():
@@ -200,6 +210,7 @@ def test_reconcile_star_outcomes_restores_old_events_and_preserves_returns():
     saved = pd.DataFrame([{
         "code":"22220","star_date":"2026-02-10","entry_price":200,
         "return_30d":0.12,"actual_days_30d":31,
+        "outcome_horizon_basis":"trading_sessions_v1",
     }])
     out = reconcile_star_outcomes(evaluations, saved)
     assert set(out["code"]) == {"11110", "22220"}
@@ -207,6 +218,22 @@ def test_reconcile_star_outcomes_restores_old_events_and_preserves_returns():
     assert round(float(new["return_30d"]), 6) == 0.12
     assert int(new["actual_days_30d"]) == 31
     assert out.iloc[0]["code"] == "11110"
+
+
+def test_reconcile_drops_legacy_calendar_day_outcomes():
+    evaluations = pd.DataFrame([{
+        "evaluation_date":"2026-02-10","code":"22220","name":"New",
+        "intuitive_symbol":"◎☆","latest_price":200,
+        "latest_market_date":"2026-02-10","latest_trend":"上昇",
+    }])
+    saved = pd.DataFrame([{
+        "code":"22220","star_date":"2026-02-10","entry_price":200,
+        "return_30d":0.12,"actual_days_30d":30,
+    }])
+    out = reconcile_star_outcomes(evaluations, saved)
+    row = out.iloc[0]
+    assert pd.isna(row["return_30d"])
+    assert row["outcome_horizon_basis"] == "trading_sessions_v1"
 
 
 def test_selected_only_does_not_treat_string_false_as_true(tmp_path):

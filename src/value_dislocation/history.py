@@ -37,6 +37,7 @@ CONDITION_RULES = [
 ]
 
 STAR_OUTCOME_HORIZONS = (10, 20, 30, 60, 90, 180)
+STAR_OUTCOME_HORIZON_BASIS = "trading_sessions_v1"
 
 
 def history_root(project_root: Path) -> Path:
@@ -666,22 +667,21 @@ def build_star_events(
                 event["star_date"] = pd.Timestamp(row["observation_date"]).date().isoformat()
                 event["entry_price"] = float(row["latest_price"])
                 event["star_mode"] = star_mode
+                event["outcome_horizon_basis"] = STAR_OUTCOME_HORIZON_BASIS
                 for horizon in horizons:
-                    target = pd.Timestamp(row["observation_date"]) + pd.to_timedelta(int(horizon), unit="D")
-                    future = g.loc[(g["observation_date"] >= target) & pd.to_numeric(g["latest_price"], errors="coerce").notna()]
-                    if future.empty:
-                        event[f"return_{horizon}d"] = None
-                        event[f"actual_days_{horizon}d"] = None
-                    else:
-                        f = future.iloc[0]
-                        event[f"return_{horizon}d"] = float(f["latest_price"] / row["latest_price"] - 1.0)
-                        event[f"actual_days_{horizon}d"] = int((pd.Timestamp(f["observation_date"]) - pd.Timestamp(row["observation_date"])).days)
+                    # Sparse evaluation snapshots cannot establish the Nth trading
+                    # session outcome. Daily prices are joined by the caller below.
+                    event[f"return_{horizon}d"] = None
+                    event[f"actual_days_{horizon}d"] = None
                 events.append(event)
             prev_star = is_star
     return pd.DataFrame(events)
 
 
-def star_rule_comparison_summary(evaluations: pd.DataFrame) -> pd.DataFrame:
+def star_rule_comparison_summary(
+    evaluations: pd.DataFrame,
+    histories: dict[str, pd.DataFrame] | None = None,
+) -> pd.DataFrame:
     """Compare old/new star rules over the period where v0.6.61 metadata exists.
 
     This is intentionally prospective and point-in-time safe: pre-v0.6.61 rows are
@@ -700,6 +700,8 @@ def star_rule_comparison_summary(evaluations: pd.DataFrame) -> pd.DataFrame:
     rows = []
     for mode, label in (("legacy", "旧◎☆条件"), ("reversal", "反転確認◎☆")):
         events = build_star_events(covered, star_mode=mode)
+        if histories:
+            events = enrich_star_events_with_market_histories(events, histories)
         row = {"判定方式": label, "開始イベント数": int(len(events))}
         for horizon in STAR_OUTCOME_HORIZONS:
             values = _numeric_column(events, f"return_{horizon}d").dropna()
@@ -717,10 +719,13 @@ def reconcile_star_outcomes(
     saved_events: pd.DataFrame | None = None,
     *,
     star_mode: str = "displayed",
+    histories: dict[str, pd.DataFrame] | None = None,
 ) -> pd.DataFrame:
-    """Rebuild the complete star event set while preserving saved forward returns."""
-    comparison = star_rule_comparison_summary(evaluations)
+    """Rebuild star events and preserve saved returns only when their basis matches."""
+    comparison = star_rule_comparison_summary(evaluations, histories)
     rebuilt = build_star_events(evaluations, star_mode=star_mode)
+    if histories:
+        rebuilt = enrich_star_events_with_market_histories(rebuilt, histories)
     if rebuilt.empty:
         rebuilt.attrs["star_rule_comparison"] = comparison
         return rebuilt
@@ -745,6 +750,10 @@ def reconcile_star_outcomes(
         if key not in saved_by_key.index:
             continue
         prior = saved_by_key.loc[key]
+        # Older files measured calendar days or used sparse evaluation snapshots.
+        # Never mix those values into the trading-session series.
+        if str(prior.get("outcome_horizon_basis", "")) != STAR_OUTCOME_HORIZON_BASIS:
+            continue
         for col in preserve:
             if col not in saved_by_key.columns:
                 continue
@@ -757,7 +766,12 @@ def reconcile_star_outcomes(
 
 
 def enrich_star_events_with_market_histories(star_events: pd.DataFrame, histories: dict[str, pd.DataFrame], horizons: Iterable[int] = STAR_OUTCOME_HORIZONS) -> pd.DataFrame:
-    """Fill forward returns from externally supplied daily histories without fetching data here."""
+    """Fill N-trading-session returns from daily histories without fetching data here.
+
+    ``histories`` may be local curated prices or explicitly fetched Yahoo histories.
+    The return horizon is the same session count used by Walk-Forward; the
+    ``actual_days_*`` field remains the elapsed calendar-day count for context.
+    """
     if star_events.empty:
         return star_events.copy()
     out = star_events.copy()
@@ -770,6 +784,7 @@ def enrich_star_events_with_market_histories(star_events: pd.DataFrame, historie
         h["date"] = pd.to_datetime(h["date"], errors="coerce").dt.tz_localize(None)
         h["close"] = pd.to_numeric(h["close"], errors="coerce")
         h = h.dropna(subset=["date", "close"]).sort_values("date")
+        h = h.drop_duplicates("date", keep="last").reset_index(drop=True)
         if h.empty:
             continue
         start = pd.Timestamp(event.get("star_date"))
@@ -783,13 +798,16 @@ def enrich_star_events_with_market_histories(star_events: pd.DataFrame, historie
             start = pd.Timestamp(entry_rows.iloc[0]["date"])
             out.at[idx, "star_date"] = start.date().isoformat()
         for horizon in horizons:
-            target = start + pd.to_timedelta(int(horizon), unit="D")
-            future = h.loc[h["date"] >= target]
-            if future.empty:
+            # Match validation._forward_return_indexed: first session strictly
+            # after the selection date is session 1.
+            first_future = int(h["date"].searchsorted(start.normalize(), side="right"))
+            position = first_future + int(horizon) - 1
+            if position < 0 or position >= len(h):
                 continue
-            row = future.iloc[0]
+            row = h.iloc[position]
             out.at[idx, f"return_{horizon}d"] = float(row["close"] / float(entry) - 1.0)
             out.at[idx, f"actual_days_{horizon}d"] = int((pd.Timestamp(row["date"]) - start).days)
+        out.at[idx, "outcome_horizon_basis"] = STAR_OUTCOME_HORIZON_BASIS
     return out
 
 

@@ -43,6 +43,7 @@ from value_dislocation.external_event_review import (
 from value_dislocation.ui_preferences import load_ui_preferences, save_ui_preferences
 from value_dislocation.history import (
     STAR_OUTCOME_HORIZONS,
+    STAR_OUTCOME_HORIZON_BASIS,
     attach_daily_final_evaluations,
     select_slow_revaluation_batch,
     build_star_events,
@@ -2525,28 +2526,64 @@ def _render_history_evaluations(evaluation: pd.DataFrame) -> None:
 def _render_history_star_validation(evaluation: pd.DataFrame) -> None:
     star_signature = _star_outcomes_signature()
     saved_star_events = _cached_load_star_outcomes(str(ROOT), star_signature)
+    # Recalculate from the already stored daily prices only. Opening this screen
+    # must not trigger J-Quants or Yahoo requests.
+    try:
+        local_prices = _cached_walk_forward_prices(str(ROOT), _walk_forward_data_signature())
+    except RealDataNotReadyError:
+        local_prices = pd.DataFrame()
+    local_histories = {}
+    if not local_prices.empty and {"code", "date", "close"}.issubset(local_prices.columns):
+        for code, group in local_prices.groupby(local_prices["code"].astype(str), sort=False):
+            local_histories[str(code)] = group[["date", "close"]].copy()
     # Evaluation history is the source of truth for the complete ◎☆ event set.
-    # Reconcile every render so older events cannot disappear merely because the
-    # outcomes file was created later; preserve any already-enriched returns.
-    star_events = reconcile_star_outcomes(evaluation, saved_star_events) if not evaluation.empty else saved_star_events.copy()
-    saved_keys = set()
-    current_keys = set()
-    if not saved_star_events.empty and {"code", "star_date"}.issubset(saved_star_events.columns):
-        saved_keys = set(zip(saved_star_events["code"].astype(str), saved_star_events["star_date"].astype(str)))
-    if not star_events.empty and {"code", "star_date"}.issubset(star_events.columns):
-        current_keys = set(zip(star_events["code"].astype(str), star_events["star_date"].astype(str)))
-    if current_keys != saved_keys:
+    # Reconcile every render so older events cannot disappear. Preserve saved
+    # returns only when their stored horizon basis is the current one.
+    star_events = reconcile_star_outcomes(
+        evaluation, saved_star_events, histories=local_histories
+    ) if not evaluation.empty else saved_star_events.copy()
+    if not star_events.empty:
+        old_basis = star_events.get("outcome_horizon_basis", pd.Series("", index=star_events.index)).fillna("").astype(str)
+        legacy_rows = old_basis.ne(STAR_OUTCOME_HORIZON_BASIS)
+        if legacy_rows.any():
+            star_events = star_events.copy()
+            for horizon in STAR_OUTCOME_HORIZONS:
+                for column in (f"return_{horizon}d", f"actual_days_{horizon}d"):
+                    if column not in star_events:
+                        star_events[column] = None
+                    star_events.loc[legacy_rows, column] = None
+            star_events.loc[legacy_rows, "outcome_horizon_basis"] = STAR_OUTCOME_HORIZON_BASIS
+    if evaluation.empty and not star_events.empty and local_histories:
+        star_events = enrich_star_events_with_market_histories(star_events, local_histories)
+    # Persist only when event keys or outcome values changed. Legacy calendar-day
+    # values are intentionally replaced by trading-session values (or left blank
+    # when the local daily history cannot support the horizon).
+    outcome_columns = ["code", "star_date", "outcome_horizon_basis"] + [
+        column for h in STAR_OUTCOME_HORIZONS
+        for column in (f"return_{h}d", f"actual_days_{h}d")
+    ]
+    def outcome_signature(frame: pd.DataFrame) -> str:
+        if frame.empty:
+            return ""
+        comparable = frame.reindex(columns=outcome_columns).copy()
+        for column in ("code", "star_date", "outcome_horizon_basis"):
+            comparable[column] = comparable[column].fillna("").astype(str)
+        comparable = comparable.sort_values(["code", "star_date"], kind="stable").reset_index(drop=True)
+        return comparable.to_csv(index=False, na_rep="")
+    if outcome_signature(star_events) != outcome_signature(saved_star_events):
         save_star_outcomes(ROOT, star_events)
         star_signature = _star_outcomes_signature()
 
     if star_events.empty:
         st.info("◎☆イベントがまだありません。◎☆評価が保存されると、その日を起点に追跡を開始します。")
         return
+    if not local_histories:
+        st.info("ローカルの日足がないため、◎☆後の取引日数実績は未計算です。必要な場合は『Yahooで…実績を更新』を押すと、Yahoo日足を明示的に取得して計算できます。")
 
     star_codes = sorted(set(star_events.get("code", pd.Series(dtype=str)).dropna().astype(str)))
     refresh_col, info_col = st.columns([2, 5])
-    refresh_clicked = refresh_col.button("Yahooで10/20/30/60/90/180日実績を更新", key="history_refresh_star_outcomes", type="primary")
-    info_col.caption("画面を開いただけではYahooへアクセスしません。必要なときだけ明示的に更新するため、履歴画面の初期表示を高速化しています。")
+    refresh_clicked = refresh_col.button("Yahooで10/20/30/60/90/180取引日実績を更新", key="history_refresh_star_outcomes", type="primary")
+    info_col.caption("10/20/30/60/90/180日は◎☆判定後の取引セッション数です。通常表示では保存済み日足だけを使い、Yahooへはアクセスしません。ボタンを押した場合だけYahoo日足で実績を更新します。")
     if refresh_clicked:
         if star_codes and yahoo_bulk_fetch_allowed(len(star_codes)):
             histories = {}
@@ -2576,11 +2613,11 @@ def _render_history_star_validation(evaluation: pd.DataFrame) -> None:
     first_metrics[0].metric("◎☆になった記録", f"{len(star_events):,}", f"対象 {unique_star_codes:,} 銘柄")
     for idx, horizon in enumerate((10, 20, 30), start=1):
         completed = completed_by_horizon[horizon]
-        first_metrics[idx].metric(f"{horizon}日確定", f"{len(completed):,}", f"平均 {completed.mean()*100:.1f}%" if len(completed) else "未確定")
+        first_metrics[idx].metric(f"{horizon}取引日確定", f"{len(completed):,}", f"平均 {completed.mean()*100:.1f}%" if len(completed) else "未確定")
     second_metrics = st.columns(3)
     for idx, horizon in enumerate((60, 90, 180)):
         completed = completed_by_horizon[horizon]
-        second_metrics[idx].metric(f"{horizon}日確定", f"{len(completed):,}", f"平均 {completed.mean()*100:.1f}%" if len(completed) else "未確定")
+        second_metrics[idx].metric(f"{horizon}取引日確定", f"{len(completed):,}", f"平均 {completed.mean()*100:.1f}%" if len(completed) else "未確定")
 
     forward_chart = star_forward_return_summary(star_events)
     all_analysis_signature = _analysis_history_signature(None, None)
@@ -2591,9 +2628,10 @@ def _render_history_star_validation(evaluation: pd.DataFrame) -> None:
     ).fillna(0).gt(0).any():
         st.markdown("#### 可視化：◎☆後の期間別成績（リターン・プラス率・確定件数）")
         st.caption(
-            "横軸は◎☆になった後の日数、縦軸はその期間までの平均株価変化です。色は株価が上がった割合、丸の大きさは成績を確認できた記録数です。"
+            "横軸は◎☆判定後の取引セッション数、縦軸はその期間までの平均株価変化です。色は株価が上がった割合、丸の大きさは成績を確認できた記録数です。"
             "平均だけで判断せず、上がった割合と記録数も合わせて確認してください。"
         )
+        st.caption("期間ごとに確定件数が異なります。件数が少ない期間の平均は、他の期間や未確定の記録と同じ集団を表しません。")
         _render_horizon_performance_bubbles(forward_chart)
 
     _render_history_analytical_visuals(star_events, perf)
