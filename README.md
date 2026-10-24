@@ -356,11 +356,22 @@ git pull origin main
 
 ## GitHub / CI
 
-- リポジトリはPrivate運用を前提とします。
+- このリポジトリは現在Publicです。実データやユーザー固有情報を含めない公開用ソースとして管理してください。Private運用にする場合は、GitHubのSettings → General → Danger Zoneから可視性を変更してください。
 - `.env`、取得済み市場データ、ユーザープロファイル、実行時出力は `.gitignore` の対象です。
 - 開発は `feature branch → Pull Request → GitHub Actions CI → merge` を基本フローとします。
-- push / pull request 時に `python -m pytest tests/` と `python scripts/harness_check.py` を実行します。
+- Pull Request と `main` へのpush時に、テスト・Harness、CodeQL、依存脆弱性監査、Git履歴を含む秘密情報スキャンを実行します。
+- Python依存は `requirements-lock.txt` の固定バージョンを利用し、Dependabotが週次で更新を提案します。依存監査では既知の脆弱性が見つかったため、Pillow・pyarrow・pytest・Streamlitを修正版へ更新しています。
 - `main` をローカル実行環境の正本とします。
+
+### GitHubリポジトリ設定（管理者が一度だけ実施）
+
+GitHub接続から変更できないリポジトリ設定は、Web画面で次のように設定してください。
+
+1. **Settings → General → Danger Zone → Change repository visibility** で、非公開を希望する場合はPrivateへ変更します。Publicを継続する場合も、APIキー・実データ・個人情報を含めないでください。
+2. **Settings → Branches → Add branch protection rule** で `main` を指定し、Pull Request必須、required status checks（`test`、`CodeQL analysis`、`dependency-audit`、`gitleaks`）を設定します。管理者の直接pushも禁止する設定を有効にします。
+3. **Settings → Code security and analysis** でDependabot alerts、Dependabot security updates、Secret scanning、Push protectionを有効にします（利用可能なプラン・公開設定に応じて表示されます）。
+
+ローカルStreamlitは `127.0.0.1` のみで起動します。外部ネットワークへ公開する場合は、認証・TLS・ファイアウォール等を備えた保護済みのリバースプロキシ配下で運用してください。画面に入力したJ-Quants APIキーはStreamlitプロセスの環境変数に設定されるため、未信頼ユーザーが接続できる環境で実行しないでください。
 
 ## データ取得と保存
 

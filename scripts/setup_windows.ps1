@@ -169,7 +169,8 @@ Write-Host "Upgrading pip..." -ForegroundColor Yellow
 Invoke-CheckedCommand -Executable $venvPython -Arguments @("-m", "pip", "install", "--upgrade", "pip") -FailureMessage "pip upgrade failed."
 
 Write-Host "Installing project packages..." -ForegroundColor Yellow
-Invoke-CheckedCommand -Executable $venvPython -Arguments @("-m", "pip", "install", "-e", ".[dashboard,dev]") -FailureMessage "Package installation failed."
+Invoke-CheckedCommand -Executable $venvPython -Arguments @("-m", "pip", "install", "-r", "requirements-lock.txt") -FailureMessage "Locked dependency installation failed."
+Invoke-CheckedCommand -Executable $venvPython -Arguments @("-m", "pip", "install", "--no-deps", "-e", ".") -FailureMessage "Project installation failed."
 
 if ((Test-Path -LiteralPath ".env.example") -and (-not (Test-Path -LiteralPath ".env"))) {
     Copy-Item -LiteralPath ".env.example" -Destination ".env"

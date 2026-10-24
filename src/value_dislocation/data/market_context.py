@@ -59,7 +59,7 @@ def translate_text_to_japanese(text: str | None, translator_factory=None) -> str
             try:
                 from deep_translator import GoogleTranslator
             except ImportError as exc:
-                raise RuntimeError("deep-translator is not installed. Run setup_windows.cmd.") from exc
+                raise RuntimeError("Optional news translation is unavailable because its dependency is disabled for security.") from exc
             translator = GoogleTranslator(source="auto", target="ja")
         else:
             translator = translator_factory(source="auto", target="ja")
