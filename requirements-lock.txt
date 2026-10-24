@@ -102,7 +102,7 @@ packaging==26.3
     #   plotly
     #   pytest
     #   streamlit
-pandas==2.3.3
+pandas==3.0.6
     # via
     #   jquants-api-client
     #   stock-value-dislocation-verification-system (pyproject.toml)
@@ -124,11 +124,11 @@ platformdirs==4.13.5
     # via
     #   pip-audit
     #   yfinance
-plotly==6.9.0
+plotly==7.1.0
     # via stock-value-dislocation-verification-system (pyproject.toml)
 pluggy==1.7.0
     # via pytest
-protobuf==6.33.6
+protobuf==7.36.2
     # via
     #   streamlit
     #   yfinance
@@ -179,7 +179,7 @@ requests==2.34.2
     #   pip-audit
     #   streamlit
     #   yfinance
-rich==14.3.4
+rich==15.0.0
     # via
     #   pip-audit
     #   stock-value-dislocation-verification-system (pyproject.toml)
