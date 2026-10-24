@@ -202,7 +202,7 @@ starlette==1.9.0
     # via streamlit
 streamlit==1.66.1
     # via stock-value-dislocation-verification-system (pyproject.toml)
-tenacity==9.2.1
+tenacity==8.5.0
     # via jquants-api-client
 tomli==2.5.0
     # via pip-audit
