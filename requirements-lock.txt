@@ -154,7 +154,7 @@ pyparsing==3.3.3
     # via pip-requirements-parser
 pytest==9.1.1
     # via stock-value-dislocation-verification-system (pyproject.toml)
-python-dateutil==2.9.0.post0
+python-dateutil==3.0.0
     # via
     #   pandas
     #   stock-value-dislocation-verification-system (pyproject.toml)
