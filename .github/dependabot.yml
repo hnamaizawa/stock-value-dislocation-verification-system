@@ -5,6 +5,10 @@ updates:
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
+    ignore:
+      - dependency-name: "tenacity"
+        update-types:
+          - "version-update:semver-major"
     groups:
       python-dependencies:
         patterns:
