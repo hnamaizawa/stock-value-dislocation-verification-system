@@ -121,6 +121,18 @@ def _selected_benchmark_return(frame: pd.DataFrame) -> pd.Series:
     return values
 
 
+def _market_regime(benchmark_return_6m: object) -> str:
+    """Label the replay-date market environment using only its trailing TOPIX return."""
+    value = pd.to_numeric(pd.Series([benchmark_return_6m]), errors="coerce").iloc[0]
+    if pd.isna(value):
+        return "比較データなし"
+    if value <= -0.05:
+        return "市場下落（6か月 -5%以下）"
+    if value >= 0.05:
+        return "市場上昇（6か月 +5%以上）"
+    return "市場横ばい（6か月 -5%超〜+5%未満）"
+
+
 def with_attribution(frame: pd.DataFrame, method: str = "v2_sector_absolute") -> pd.DataFrame:
     out = frame.copy()
     out["benchmark_return_6m"] = _selected_benchmark_return(out)
@@ -576,6 +588,8 @@ def walk_forward_validation(
                 "entry_price": entry,
                 "quantitative_score": row.get("quantitative_score"),
                 "external_shock_attribution": row.get("external_shock_attribution"),
+                "benchmark_return_6m": row.get("benchmark_return_6m"),
+                "market_regime": _market_regime(row.get("benchmark_return_6m")),
                 "external_shock_attribution_score": row.get("external_shock_attribution_score"),
                 "external_shock_attribution_method": row.get("external_shock_attribution_method", "v2_sector_absolute"),
                 "company_specific_component_6m": row.get("company_specific_component_6m"),
@@ -689,6 +703,33 @@ def walk_forward_summary(events: pd.DataFrame, horizons: Iterable[int] = STAR_OU
                 "選択効果プラス率": float((edge > 0).mean()) if len(edge) else None,
             }
         )
+    return pd.DataFrame(rows)
+
+
+def walk_forward_market_regime_summary(
+    events: pd.DataFrame,
+    horizons: Iterable[int] = STAR_OUTCOME_HORIZONS,
+) -> pd.DataFrame:
+    """Summarize outcomes by the market environment known on each selection date."""
+    if events.empty:
+        return pd.DataFrame()
+    frame = events.copy()
+    if "market_regime" not in frame.columns:
+        source = frame.get("benchmark_return_6m", pd.Series(np.nan, index=frame.index))
+        frame["market_regime"] = source.map(_market_regime)
+    rows: list[dict] = []
+    regimes = (
+        "市場下落（6か月 -5%以下）",
+        "市場横ばい（6か月 -5%超〜+5%未満）",
+        "市場上昇（6か月 +5%以上）",
+        "比較データなし",
+    )
+    for regime in regimes:
+        subset = frame.loc[frame["market_regime"].astype(str).eq(regime)].copy()
+        if subset.empty:
+            continue
+        for row in walk_forward_summary(subset, horizons=horizons).to_dict("records"):
+            rows.append({"相場環境": regime, **row})
     return pd.DataFrame(rows)
 
 
