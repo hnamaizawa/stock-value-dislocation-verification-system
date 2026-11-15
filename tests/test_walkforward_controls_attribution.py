@@ -16,9 +16,10 @@ from value_dislocation.validation import (
     walk_forward_entry_timing_summary,
     walk_forward_external_attribution_comparison,
     walk_forward_history_diagnostics,
+    walk_forward_market_regime_summary,
+    walk_forward_readiness,
     walk_forward_summary,
     walk_forward_validation,
-    walk_forward_readiness,
 )
 
 
@@ -221,6 +222,52 @@ def test_walk_forward_summary_reports_selection_edge():
     assert np.isclose(row["類似非選択平均"], -0.015)
     assert np.isclose(row["選択効果"], 0.055)
     assert np.isclose(row["選択効果プラス率"], 1.0)
+
+
+def test_market_regime_summary_separates_up_and_down_market_results():
+    events = pd.DataFrame([
+        {
+            "selection_date": "2024-01-02", "code": "A", "episode_id": "A:1",
+            "benchmark_return_6m": -0.08, "return_30d": -0.02,
+            "control_return_30d": -0.04, "selection_edge_30d": 0.02,
+        },
+        {
+            "selection_date": "2024-06-03", "code": "B", "episode_id": "B:1",
+            "benchmark_return_6m": 0.12, "return_30d": 0.08,
+            "control_return_30d": 0.05, "selection_edge_30d": 0.03,
+        },
+        {
+            "selection_date": "2024-06-04", "code": "C", "episode_id": "C:1",
+            "benchmark_return_6m": 0.01, "return_30d": 0.03,
+            "control_return_30d": 0.02, "selection_edge_30d": 0.01,
+        },
+    ])
+
+    summary = walk_forward_market_regime_summary(events, horizons=(30,))
+    by_regime = summary.set_index("相場環境")
+
+    assert set(by_regime.index) == {
+        "市場下落（6か月 -5%以下）",
+        "市場横ばい（6か月 -5%超〜+5%未満）",
+        "市場上昇（6か月 +5%以上）",
+    }
+    assert by_regime.loc["市場下落（6か月 -5%以下）", "確定エピソード数"] == 1
+    assert np.isclose(by_regime.loc["市場下落（6か月 -5%以下）", "選択効果"], 0.02)
+    assert by_regime.loc["市場上昇（6か月 +5%以上）", "確定エピソード数"] == 1
+    assert np.isclose(by_regime.loc["市場上昇（6か月 +5%以上）", "候補平均"], 0.08)
+
+
+def test_market_regime_summary_labels_missing_benchmark_separately():
+    events = pd.DataFrame([{
+        "episode_id": "A:1", "benchmark_return_6m": np.nan,
+        "return_30d": 0.01, "control_return_30d": 0.00,
+        "selection_edge_30d": 0.01,
+    }])
+
+    summary = walk_forward_market_regime_summary(events, horizons=(30,))
+
+    assert summary["相場環境"].tolist() == ["比較データなし"]
+    assert summary.iloc[0]["確定エピソード数"] == 1
 
 
 def test_walk_forward_bootstrap_interval_tightens_with_more_episodes():
@@ -476,6 +523,7 @@ def test_walk_forward_filters_future_inputs_before_selection(monkeypatch):
         "code": ["A"] * len(dates),
         "date": dates,
         "close": np.linspace(100.0, 114.0, len(dates)),
+        "topix_close": [100.0] * 7 + [90.0, 50.0, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0],
     })
     financials = pd.DataFrame([
         {"code": "A", "disclosure_date": dates[0], "marker": "past"},
@@ -488,9 +536,12 @@ def test_walk_forward_filters_future_inputs_before_selection(monkeypatch):
         observed["as_of"] = pd.Timestamp(as_of)
         observed["max_price"] = p["date"].max()
         observed["max_disclosure"] = f["disclosure_date"].max()
+        topix = pd.to_numeric(p["topix_close"], errors="coerce").dropna()
         return pd.DataFrame([{
             "code": "A", "name": "A社", "sector": "Tech", "market": "Prime",
             "close": float(p.iloc[-1]["close"]), "return_6m": -0.1,
+            "benchmark_source": "official_topix",
+            "topix_return_6m": float(topix.iloc[-1] / topix.iloc[0] - 1.0),
         }])
 
     def fake_apply(prepared, config):
@@ -529,6 +580,8 @@ def test_walk_forward_filters_future_inputs_before_selection(monkeypatch):
     assert observed["signal_current_price"] == expected_latest
     assert bool(events.iloc[0]["reversal_star_eligible"])
     assert events.iloc[0]["universe_source"].startswith("current_master_fallback")
+    assert np.isclose(events.iloc[0]["benchmark_return_6m"], -0.1)
+    assert events.iloc[0]["market_regime"] == "市場下落（6か月 -5%以下）"
 
 
 def test_walk_forward_module_has_no_market_fetch_dependency():

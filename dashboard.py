@@ -84,6 +84,7 @@ from value_dislocation.validation import (
     walk_forward_entry_timing_summary,
     walk_forward_external_attribution_comparison,
     walk_forward_dislocation_score_comparison,
+    walk_forward_market_regime_summary,
     walk_forward_summary,
     walk_forward_validation,
     walk_forward_history_diagnostics,
@@ -3168,6 +3169,23 @@ def _render_history_walk_forward() -> None:
         "青い棒は候補に選ばれた銘柄、赤い棒は条件が似ていたが選ばれなかった銘柄の平均株価変化です。紫の印は両者の差で、0より上なら候補側の成績が上でした。"
         "横の棒はそれぞれの平均を表し、積み上げていません。これは過去の比較で、選び方が差の原因だと証明するものではありません。"
     )
+    regime_summary = walk_forward_market_regime_summary(events, horizons=result_horizons)
+    if not regime_summary.empty:
+        regime_display = regime_summary.copy()
+        percent_columns = [
+            "候補平均", "候補プラス率", "類似非選択平均", "選択効果",
+            "選択効果95%区間下限", "選択効果95%区間上限", "選択効果プラス率",
+        ]
+        for col in percent_columns:
+            if col in regime_display:
+                regime_display[col] = pd.to_numeric(regime_display[col], errors="coerce") * 100
+        st.markdown("#### 相場環境ごとのWalk-Forward成績")
+        _analysis_dataframe(regime_display, width="stretch", hide_index=True)
+        st.caption(
+            "相場環境は各選定日時点で分かっていたTOPIX（または明示されたTOPIX連動ETF代理値）の6か月騰落率で分類します。"
+            "-5%以下を下落、+5%以上を上昇、その間を横ばいとしています。各行の確定件数と95%範囲を確認してください。"
+            "これは国内市場の比較であり、世界市場やニュースの影響を直接測るものではありません。候補条件・点数は変わりません。"
+        )
     if "信頼区間が0を含む" in summary.columns:
         uncertain = summary.loc[summary["信頼区間が0を含む"].fillna(True), "期間"].tolist()
         if uncertain:

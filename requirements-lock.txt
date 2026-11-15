@@ -196,7 +196,7 @@ six==1.17.0
     # via python-dateutil
 sortedcontainers==2.4.0
     # via cyclonedx-python-lib
-soupsieve==3.0.4
+soupsieve==4.0.0
     # via beautifulsoup4
 starlette==1.9.0
     # via streamlit
