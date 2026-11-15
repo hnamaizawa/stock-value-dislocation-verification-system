@@ -1048,6 +1048,102 @@ def _render_walk_forward_comparison_chart(summary: pd.DataFrame) -> None:
     st.plotly_chart(fig, width="stretch", config={"displaylogo": False})
 
 
+def _render_market_regime_walk_forward_chart(summary: pd.DataFrame) -> None:
+    """Show candidate/control means and the selection-effect interval by regime."""
+    required = {
+        "相場環境", "期間", "候補平均", "類似非選択平均", "選択効果",
+        "選択効果95%区間下限", "選択効果95%区間上限", "確定エピソード数",
+    }
+    if summary is None or summary.empty or not required.issubset(summary.columns):
+        return
+    periods = summary["期間"].dropna().astype(str).drop_duplicates().tolist()
+    if not periods:
+        return
+    preferred = next((period for period in periods if period.startswith("60")), periods[0])
+    selected_period = st.selectbox(
+        "相場環境グラフの評価期間",
+        periods,
+        index=periods.index(preferred),
+        key="wf_market_regime_chart_period",
+        help="市場環境ごとの候補平均・比較銘柄平均・選択効果を、選んだ取引日後の結果で見ます。",
+    )
+    frame = summary.loc[summary["期間"].astype(str).eq(str(selected_period))].copy()
+    numeric_columns = [
+        "候補平均", "類似非選択平均", "選択効果",
+        "選択効果95%区間下限", "選択効果95%区間上限",
+    ]
+    for column in numeric_columns:
+        frame[column] = pd.to_numeric(frame[column], errors="coerce")
+    if frame[numeric_columns].notna().sum().sum() == 0:
+        st.info("この期間はグラフにできる確定実績がまだありません。")
+        return
+    try:
+        import plotly.graph_objects as go
+    except ImportError:
+        st.info("相場環境別グラフの表示にはPlotlyが必要です。")
+        return
+
+    upper_error = []
+    lower_error = []
+    for _, row in frame.iterrows():
+        edge = row["選択効果"]
+        low = row["選択効果95%区間下限"]
+        high = row["選択効果95%区間上限"]
+        upper_error.append(
+            max(float(high - edge), 0.0) if pd.notna(edge) and pd.notna(high) else None
+        )
+        lower_error.append(
+            max(float(edge - low), 0.0) if pd.notna(edge) and pd.notna(low) else None
+        )
+    counts = pd.to_numeric(frame["確定エピソード数"], errors="coerce").fillna(0).astype(int)
+    fig = go.Figure()
+    for column, color in (("候補平均", "#2878c8"), ("類似非選択平均", "#ef6a67")):
+        fig.add_trace(go.Bar(
+            name=column,
+            x=frame["相場環境"],
+            y=frame[column],
+            marker_color=color,
+            customdata=counts,
+            text=frame[column].map(lambda value: f"{value:+.2f}%" if pd.notna(value) else ""),
+            textposition="outside",
+            hovertemplate=f"%{{x}}<br>{column}=%{{y:+.2f}}%<br>確定エピソード=%{{customdata}}件<extra></extra>",
+        ))
+    fig.add_trace(go.Scatter(
+        name="選択効果（候補−類似非選択）",
+        x=frame["相場環境"],
+        y=frame["選択効果"],
+        mode="markers+text",
+        marker={"symbol": "diamond", "size": 12, "color": "#5b3f9b"},
+        error_y={
+            "type": "data", "symmetric": False,
+            "array": upper_error, "arrayminus": lower_error,
+            "color": "#5b3f9b", "thickness": 1.5, "width": 5,
+        },
+        customdata=counts,
+        text=frame["選択効果"].map(lambda value: f"{value:+.2f}pt" if pd.notna(value) else ""),
+        textposition="bottom center",
+        hovertemplate=(
+            "%{x}<br>選択効果=%{y:+.2f}ポイント<br>確定エピソード=%{customdata}件"
+            "<br>縦線は選択効果の95%範囲<extra></extra>"
+        ),
+    ))
+    fig.add_hline(y=0, line_dash="dash", line_color="#666")
+    fig.update_layout(
+        barmode="group",
+        height=460,
+        margin={"l": 20, "r": 20, "t": 35, "b": 20},
+        xaxis_title="選定日時点の市場環境",
+        yaxis_title="平均リターン／選択効果（%・ポイント）",
+        legend={"orientation": "h", "yanchor": "bottom", "y": 1.02, "xanchor": "left", "x": 0},
+        hovermode="x unified",
+    )
+    st.plotly_chart(fig, width="stretch", config={"displaylogo": False})
+    st.caption(
+        "棒は候補と類似非選択の平均、紫の点は両者の差です。紫の縦線は選択効果の95%範囲で、0の線をまたぐ場合は差がはっきりしたとは言えません。"
+        "確定件数が少ない環境では値や範囲が大きく変わりやすく、比較の目安としてご覧ください。"
+    )
+
+
 @st.cache_resource(show_spinner=False, max_entries=2)
 def _load_bundle(manifest_mtime_ns: int) -> dict:
     # The curated market bundle can contain millions of price rows. cache_resource
@@ -3181,6 +3277,7 @@ def _render_history_walk_forward() -> None:
                 regime_display[col] = pd.to_numeric(regime_display[col], errors="coerce") * 100
         st.markdown("#### 相場環境ごとのWalk-Forward成績")
         _analysis_dataframe(regime_display, width="stretch", hide_index=True)
+        _render_market_regime_walk_forward_chart(regime_display)
         st.caption(
             "相場環境は各選定日時点で分かっていたTOPIX（または明示されたTOPIX連動ETF代理値）の6か月騰落率で分類します。"
             "-5%以下を下落、+5%以上を上昇、その間を横ばいとしています。各行の確定件数と95%範囲を確認してください。"
