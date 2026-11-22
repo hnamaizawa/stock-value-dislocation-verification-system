@@ -6,7 +6,7 @@
 #
 altair==6.3.0
     # via streamlit
-annotated-doc==0.0.6
+annotated-doc==0.0.7
     # via typer
 annotated-types==0.8.0
     # via pydantic
@@ -22,7 +22,7 @@ beautifulsoup4==4.15.0
     # via yfinance
 boolean-py==5.0
     # via license-expression
-cachecontrol==0.14.4
+cachecontrol==0.15.0
     # via
     #   cachecontrol
     #   pip-audit
@@ -44,7 +44,7 @@ cyclonedx-python-lib==11.12.0
     # via pip-audit
 defusedxml==0.7.1
     # via py-serializable
-filelock==4.2.10
+filelock==4.2.12
     # via cachecontrol
 h11==0.16.0
     # via uvicorn
@@ -80,7 +80,7 @@ msgpack==1.2.4
     # via cachecontrol
 multitasking==0.0.13
     # via yfinance
-narwhals==2.28.0
+narwhals==2.29.0
     # via
     #   altair
     #   plotly
@@ -120,7 +120,7 @@ pip-audit==2.10.1
     # via stock-value-dislocation-verification-system (pyproject.toml)
 pip-requirements-parser==32.0.1
     # via pip-audit
-platformdirs==4.14.5
+platformdirs==4.14.7
     # via
     #   pip-audit
     #   yfinance
@@ -160,7 +160,7 @@ python-dateutil==3.0.0
     #   stock-value-dislocation-verification-system (pyproject.toml)
 python-dotenv==1.2.4
     # via stock-value-dislocation-verification-system (pyproject.toml)
-python-multipart==0.0.33
+python-multipart==0.0.34
     # via streamlit
 pytz==2026.6
     # via
@@ -188,7 +188,7 @@ rpds-py==2026.9.1
     # via
     #   jsonschema
     #   referencing
-ruff==0.17.4
+ruff==0.17.5
     # via stock-value-dislocation-verification-system (pyproject.toml)
 shellingham==1.5.4
     # via typer
@@ -196,7 +196,7 @@ six==1.17.0
     # via python-dateutil
 sortedcontainers==2.4.0
     # via cyclonedx-python-lib
-soupsieve==4.1
+soupsieve==4.1.1
     # via beautifulsoup4
 starlette==1.10.0
     # via streamlit
@@ -208,7 +208,7 @@ tomli==2.5.0
     # via pip-audit
 tomli-w==1.2.0
     # via pip-audit
-typer==0.29.1
+typer==0.29.2
     # via stock-value-dislocation-verification-system (pyproject.toml)
 typing-extensions==4.16.0
     # via
